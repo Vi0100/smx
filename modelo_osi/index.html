@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador Modelo OSI</title>
+<style>
+:root{
+  --bg1:#0a0f24; --bg2:#171c46;
+  --card:rgba(255,255,255,.055); --card2:rgba(255,255,255,.09);
+  --border:rgba(255,255,255,.12);
+  --text:#eef1ff; --muted:#9ba4cc;
+  --l7:#ff5d8f; --l6:#ff9f43; --l5:#feca57; --l4:#1dd1a1; --l3:#48dbfb; --l2:#54a0ff; --l1:#a29bfe;
+  --mono:Consolas,"Cascadia Mono","SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  color:var(--text); min-height:100vh;
+  background:
+    radial-gradient(1100px 600px at 5% -10%, #2c3290 0%, transparent 60%),
+    radial-gradient(900px 500px at 105% 0%, #5a1f6e 0%, transparent 55%),
+    linear-gradient(160deg,var(--bg1),var(--bg2));
+  background-attachment:fixed;
+}
+code{font-family:var(--mono);background:rgba(255,255,255,.1);padding:1px 5px;border-radius:5px;font-size:.92em}
+
+/* ---------- Cabecera ---------- */
+header{display:flex;align-items:center;gap:16px;padding:18px 24px 8px;max-width:1800px;margin:auto}
+.logo{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:26px;
+  background:conic-gradient(var(--l7),var(--l6),var(--l5),var(--l4),var(--l3),var(--l2),var(--l1),var(--l7));
+  box-shadow:0 6px 24px rgba(162,155,254,.35)}
+.logo span{background:var(--bg1);width:38px;height:38px;border-radius:10px;display:grid;place-items:center}
+header h1{margin:0;font-size:26px;letter-spacing:.3px}
+header p{margin:2px 0 0;color:var(--muted);font-size:14px}
+
+/* ---------- Controles ---------- */
+.controls{max-width:1800px;margin:10px auto 0;padding:0 24px}
+.bar{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-end;background:var(--card);border:1px solid var(--border);
+  border-radius:16px;padding:14px 18px;backdrop-filter:blur(8px)}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+.field input[type=text],.field input[type=number]{
+  background:rgba(0,0,0,.3);border:1px solid var(--border);color:var(--text);border-radius:10px;
+  padding:9px 12px;font-size:17px;outline:none;transition:border-color .2s,box-shadow .2s}
+.field input:focus{border-color:var(--l3);box-shadow:0 0 0 3px rgba(72,219,251,.2)}
+#msg{width:260px}
+#nseg{width:90px}
+.field small{color:var(--muted);font-size:11px}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding-bottom:9px;user-select:none}
+.check input{width:18px;height:18px;accent-color:var(--l4)}
+input[type=range]{accent-color:var(--l1);width:130px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+button{
+  border:1px solid var(--border);background:var(--card2);color:var(--text);border-radius:10px;
+  padding:9px 14px;font-size:15px;cursor:pointer;font-family:inherit;transition:transform .1s,background .2s}
+button:hover{background:rgba(255,255,255,.16)}
+button:active{transform:scale(.96)}
+button.primary{background:linear-gradient(135deg,#1dd1a1,#10ac84);border-color:transparent;color:#05241b;font-weight:700}
+button.primary:hover{filter:brightness(1.1)}
+button:disabled{opacity:.4;cursor:default}
+.shake{animation:shake .4s}
+@keyframes shake{25%{transform:translateX(-6px)}50%{transform:translateX(6px)}75%{transform:translateX(-3px)}}
+
+/* ---------- Layout principal ---------- */
+.wrap{max-width:1800px;margin:auto;padding:16px 24px 30px;display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:20px;align-items:start}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 190px minmax(0,1fr);gap:8px 0;grid-template-rows:auto repeat(7,minmax(84px,auto))}
+.colhead{display:flex;align-items:center;gap:8px;font-size:16px;padding:4px 6px 6px;flex-wrap:wrap}
+.colhead small{color:var(--muted);font-family:var(--mono)}
+.colhead .dir{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:3px 10px}
+.colhead.mid{justify-content:center;text-align:center;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+
+/* ---------- Tarjetas de capa ---------- */
+.card{
+  position:relative;background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:8px 12px 10px 18px;overflow:hidden;transition:transform .35s,box-shadow .35s,background .35s,opacity .35s;opacity:.72}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--lc)}
+.card.used{opacity:1}
+.card.active{
+  opacity:1;transform:scale(1.025);z-index:2;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--lc) 22%,transparent),rgba(255,255,255,.06));
+  box-shadow:0 0 0 2px var(--lc),0 0 34px color-mix(in srgb,var(--lc) 55%,transparent)}
+.ch{display:flex;align-items:center;gap:10px}
+.num{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;
+  background:var(--lc);color:#0b1026}
+.nm{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.nm b{font-size:15px}
+.nm small{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{margin-left:auto;flex:none;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--lc);border:1px solid color-mix(in srgb,var(--lc) 60%,transparent);padding:2px 8px;border-radius:20px}
+.body{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:7px;min-height:30px}
+.empty{color:rgba(255,255,255,.18)}
+.card.active .body>*{animation:pop .55s cubic-bezier(.2,.9,.3,1.3) both}
+.card.active .body>*:nth-child(2){animation-delay:.08s}
+.card.active .body>*:nth-child(3){animation-delay:.16s}
+@keyframes pop{from{opacity:0;transform:translateY(-14px) scale(.9)}to{opacity:1;transform:none}}
+
+/* ---------- Bloques de la PDU ---------- */
+.pdu{display:flex;flex-wrap:wrap;gap:3px;align-items:stretch}
+.blk{display:inline-flex;flex-direction:column;justify-content:center;border-radius:7px;padding:3px 8px;font-size:13px;
+  border:1px solid var(--bc,rgba(255,255,255,.3));background:color-mix(in srgb,var(--bc,#fff) 22%,transparent);line-height:1.15}
+.blk b{font-size:12px;letter-spacing:.4px}
+.blk small{font-family:var(--mono);font-size:10.5px;color:rgba(255,255,255,.78);white-space:nowrap}
+.blk.h4{--bc:var(--l4)} .blk.h3{--bc:var(--l3)} .blk.h2{--bc:var(--l2)}
+.blk.data{--bc:var(--c,#dfe4ff);font-family:var(--mono);font-size:15px;font-weight:700;white-space:pre}
+.blk.joined{display:inline-block}
+.blk.hex{--bc:#c8d0ff;font-family:var(--mono);font-size:12.5px}
+.blk.strip{opacity:.28;text-decoration:line-through;filter:grayscale(.6)}
+.card.active .blk.strip{animation:strip 1.4s .5s both}
+@keyframes strip{from{opacity:1;filter:none;text-decoration:none;transform:none}to{opacity:.28;filter:grayscale(.6);transform:scale(.92)}}
+.ok{color:#1dd1a1;font-weight:800}
+.chip{font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px;background:color-mix(in srgb,var(--lc) 25%,transparent);
+  border:1px solid var(--lc);color:#fff}
+.arrow{color:var(--muted);font-size:16px}
+.bits{font-family:var(--mono);font-size:12.5px;letter-spacing:.5px;word-break:break-all;color:rgba(255,255,255,.4)}
+.bits i{font-style:normal;color:var(--c);font-weight:700}
+.sig{width:100%;max-width:300px;height:26px;display:block}
+.l1wrap{display:flex;flex-direction:column;gap:3px;width:100%}
+
+/* lista de segmentos (emisor) y búfer (receptor) */
+.seglist,.buffer{display:flex;flex-wrap:wrap;gap:5px;width:100%;align-items:center}
+.segchip,.slot{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:13px;font-weight:700;
+  padding:2px 8px 2px 3px;border-radius:8px;border:1px solid var(--c);background:color-mix(in srgb,var(--c) 18%,transparent);white-space:pre}
+.segchip em,.slot em{font-style:normal;font-size:10.5px;background:var(--c);color:#0b1026;border-radius:5px;padding:1px 5px;font-family:"Segoe UI",sans-serif}
+.segchip i{font-style:normal;font-size:12px}
+.segchip.pend{opacity:.55}
+.segchip.cur{box-shadow:0 0 0 2px var(--c),0 0 14px var(--c)}
+.slot{--c:rgba(255,255,255,.3);border-style:dashed;background:transparent;color:var(--muted)}
+.slot.full{border-style:solid;color:#fff;background:color-mix(in srgb,var(--c) 22%,transparent)}
+.slot.new{animation:drop .7s cubic-bezier(.2,.9,.3,1.4) both;box-shadow:0 0 14px var(--c)}
+@keyframes drop{from{transform:translateY(-22px) scale(1.3);opacity:0}to{transform:none;opacity:1}}
+.lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.bubble{font-size:20px;font-weight:700;padding:8px 16px;border-radius:18px 18px 18px 4px;
+  background:linear-gradient(135deg,var(--l7),#c44569);box-shadow:0 6px 24px rgba(255,93,143,.45);white-space:pre-wrap}
+
+/* ---------- Columna central ---------- */
+.peer{position:relative;display:grid;place-items:center;opacity:.45;transition:opacity .4s}
+.peer::before{content:"";position:absolute;left:4px;right:4px;top:50%;border-top:2px dashed var(--lc);opacity:.6}
+.peer span{position:relative;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--lc);
+  background:#141a40;padding:2px 8px;border-radius:20px;border:1px solid color-mix(in srgb,var(--lc) 50%,transparent)}
+.peer.on{opacity:1}
+.peer.on::before{opacity:1;animation:dash 1s linear infinite}
+.peer.on span::after{content:" ⇄";}
+@keyframes dash{to{transform:translateX(8px)}}
+.wire{position:relative;display:flex;align-items:center;justify-content:center}
+.cable{position:absolute;left:0;right:0;top:58%;height:6px;border-radius:3px;
+  background:linear-gradient(90deg,var(--l1),#6c5ce7,var(--l1));box-shadow:0 0 12px rgba(162,155,254,.5)}
+.wire.on .cable{animation:glow 1s ease-in-out infinite alternate}
+@keyframes glow{to{box-shadow:0 0 26px rgba(162,155,254,1)}}
+.wlabel{position:absolute;bottom:4px;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+.cloud{position:absolute;top:4px;left:0;right:0;display:flex;flex-wrap:wrap;gap:3px;justify-content:center;font-size:11px;color:var(--muted)}
+.cloud .pill{animation:none}
+.pill{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:12px;background:var(--c);color:#0b1026;white-space:nowrap}
+.fly{position:absolute;top:58%;transform:translate(-50%,-50%);animation:fly var(--d) ease-in-out forwards;
+  box-shadow:0 0 16px var(--c),0 0 4px #fff}
+.fly.half{animation-name:flyhalf}
+@keyframes fly{from{left:6%}to{left:94%}}
+@keyframes flyhalf{0%{left:6%}70%{left:50%;opacity:1}100%{left:50%;top:18%;opacity:0}}
+
+/* ---------- Panel lateral ---------- */
+.side{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
+.explain{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 18px;position:relative;overflow:hidden}
+.explain::before{content:"";position:absolute;left:0;top:0;right:0;height:4px;background:var(--ec,var(--l1));transition:background .4s}
+.ex-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ex-badge{font-size:12px;font-weight:800;padding:4px 10px;border-radius:20px;background:var(--ec,var(--l1));color:#0b1026}
+.ex-step{margin-left:auto;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.explain h2{margin:12px 0 8px;font-size:20px}
+.explain p{margin:0;line-height:1.55;font-size:15.5px;color:#dde2ff}
+.explain.anim h2,.explain.anim p{animation:fadein .5s both}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}}
+.ex-pdu{margin-top:12px;font-size:13px;color:var(--muted)}
+.ex-pdu b{color:var(--ec,#fff)}
+.progress{margin-top:14px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.progress div{height:100%;width:0;background:linear-gradient(90deg,var(--l7),var(--l4),var(--l1));transition:width .4s}
+.logbox{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 8px 12px 14px}
+.logbox h3{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
+#logscroll{max-height:300px;overflow:auto;position:relative;padding-right:6px}
+#log{list-style:none;margin:0;padding:0;font-size:13px}
+#log li{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:7px;cursor:pointer;color:var(--muted)}
+#log li:hover{background:rgba(255,255,255,.07)}
+#log li.cur{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
+#log .dot{flex:none;width:9px;height:9px;border-radius:50%}
+.keys{font-size:11.5px;color:var(--muted);text-align:center}
+kbd{font-family:var(--mono);background:rgba(255,255,255,.1);border:1px solid var(--border);border-radius:4px;padding:0 5px}
+
+.foot{text-align:center;color:var(--muted);font-size:13px;padding:6px 16px 22px;letter-spacing:.3px}
+
+/* confeti */
+.confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:99;pointer-events:none;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(105vh) rotate(720deg)}}
+
+/* ---------- Responsive ---------- */
+@media (max-width:1250px){
+  .wrap{grid-template-columns:minmax(0,1fr)}
+  .side{position:static;order:-1}
+  #logscroll{max-height:110px}
+}
+@media (max-width:820px){
+  header,.controls,.wrap{padding-left:16px;padding-right:16px}
+  .stage{grid-template-columns:minmax(0,1fr);grid-template-rows:none}
+  .stage>*{grid-column:1 !important;grid-row:auto !important}
+  .peer,.colhead.mid{display:none}
+  .wire{min-height:70px;margin:6px 0}
+  .colhead.rx{margin-top:10px}
+  #msg{width:100%}
+  .btns{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span>🌐</span></div>
+  <div>
+    <h1>Simulador del modelo OSI</h1>
+    <p>Sigue cómo viaja un mensaje a través de las 7 capas: encapsulación, transmisión y desencapsulación.</p>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="bar">
+    <div class="field">
+      <label for="msg">Mensaje</label>
+      <input id="msg" type="text" value="Hola" maxlength="40" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="nseg">Segmentos</label>
+      <input id="nseg" type="number" value="2" min="1" max="10">
+      <small id="nsegHint">máx. 4</small>
+    </div>
+    <label class="check"><input id="shuffle" type="checkbox"> Llegada desordenada</label>
+    <div class="field">
+      <label for="speed">Velocidad</label>
+      <input id="speed" type="range" min="1" max="5" value="2">
+    </div>
+    <div class="btns">
+      <button class="primary" id="btnSend">✉️ Enviar</button>
+      <button id="btnPrev" title="Paso anterior (←)">⏮</button>
+      <button id="btnPlay" title="Reproducir / pausar (Espacio)">▶ Reproducir</button>
+      <button id="btnNext" title="Paso siguiente (→)">⏭</button>
+      <button id="btnReset" title="Reiniciar">↺ Reiniciar</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <main class="stage" id="stage"></main>
+  <aside class="side">
+    <div class="explain" id="explain">
+      <div class="ex-top"><span class="ex-badge" id="exBadge">Listo</span><span class="ex-step" id="exStep"></span></div>
+      <h2 id="exTitle"></h2>
+      <p id="exText"></p>
+      <div class="ex-pdu" id="exPdu"></div>
+      <div class="progress"><div id="prog"></div></div>
+    </div>
+    <div class="logbox">
+      <h3>Historial de pasos</h3>
+      <div id="logscroll"><ol id="log"></ol></div>
+    </div>
+    <div class="keys"><kbd>←</kbd> <kbd>→</kbd> avanzar/retroceder · <kbd>Espacio</kbd> reproducir/pausar</div>
+  </aside>
+</div>
+
+<footer class="foot">Vicent Valls 2026</footer>
+
+<script>
+/* ================== Datos fijos ================== */
+const LAYERS = {
+  7:{n:'Aplicación',      pdu:'Datos',    role:'Servicios de red para las aplicaciones (HTTP, DNS, correo…)'},
+  6:{n:'Presentación',    pdu:'Datos',    role:'Formato, codificación, cifrado y compresión'},
+  5:{n:'Sesión',          pdu:'Datos',    role:'Establece, mantiene y cierra el diálogo'},
+  4:{n:'Transporte',      pdu:'Segmento', role:'Segmenta, numera y asegura la entrega (TCP/UDP)'},
+  3:{n:'Red',             pdu:'Paquete',  role:'Direccionamiento lógico (IP) y enrutamiento'},
+  2:{n:'Enlace de datos', pdu:'Trama',    role:'Direccionamiento físico (MAC) y control de errores'},
+  1:{n:'Física',          pdu:'Bits',     role:'Transmite los bits como señales por el medio'}
+};
+const NET = {ipA:'192.168.1.10', ipB:'192.168.1.20', macA:'00:1A:2B:3C:4D:5E', macB:'00:AA:BB:CC:DD:EE', pA:51000, pB:8080, sid:4821};
+const SEG_COLORS = ['#ff6b6b','#feca57','#1dd1a1','#48dbfb','#ff9ff3','#ff9f43','#a29bfe','#54a0ff','#00d2d3','#badc58'];
+const SPEEDS = [5200,3900,2900,2000,1300];
+
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const bytes = s => Array.from(new TextEncoder().encode(s));
+const hex = (s, max=16) => { const b = bytes(s).map(x => x.toString(16).toUpperCase().padStart(2,'0')); return b.slice(0,max).join(' ') + (b.length>max?' …':''); };
+const bin = s => bytes(s).map(x => x.toString(2).padStart(8,'0'));
+const fcs = s => { let h = 0x1D0F; for (const b of bytes(s)) h = ((h<<5) ^ (h>>>11) ^ (b*31)) & 0xFFFF; return h.toString(16).toUpperCase().padStart(4,'0'); };
+
+/* ================== Bloques visuales ================== */
+const hdr = (l, label, sub, strip) => `<span class="blk h${l}${strip?' strip':''}"><b>${label}</b><small>${sub}</small></span>`;
+const dataB = g => `<span class="blk data" style="--c:${g.color}">"${esc(g.text)}"</span>`;
+const plainData = m => `<span class="blk data">"${esc(m)}"</span>`;
+const hexB = m => `<span class="blk hex">${hex(m)}</span>`;
+const chip = (l, t) => `<span class="chip" style="--lc:var(--l${l})">${t}</span>`;
+const ARROW = `<span class="arrow">➜</span>`;
+
+function pdu(g, low, strip, fcsOk){
+  const p = [];
+  if (low<=2) p.push(hdr(2,'MAC', `…4D:5E → …DD:EE`, strip===2));
+  if (low<=3) p.push(hdr(3,'IP', `${NET.ipA} → ${NET.ipB}`, strip===3));
+  if (low<=4) p.push(hdr(4,'TCP', `${NET.pA}→${NET.pB} · SEQ ${g.seq}`, strip===4));
+  p.push(dataB(g));
+  if (low<=2) p.push(hdr(2,'FCS', (fcsOk?'<span class="ok">✓</span> ':'') + fcs(g.text), strip===2));
+  return `<div class="pdu">${p.join('')}</div>`;
+}
+function signal(bits, color){
+  const b = bits.slice(0,40); const w = 7.5, y = c => c==='1'?4:22;
+  let x = 0, prev = null; const pts = [];
+  for (const c of b){ if (prev===null || prev!==c) pts.push(`${x},${y(c)}`); x += w; pts.push(`${x},${y(c)}`); prev = c; }
+  return `<svg class="sig" viewBox="0 0 ${x} 26" preserveAspectRatio="none"><polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function bitsHTML(g){
+  const groups = ['10101011', ...bin(g.text)];
+  const shown = groups.slice(0,6).map(o => o.replace(/1/g,'<i>1</i>')).join(' ') + (groups.length>6?' …':'');
+  return `<div class="l1wrap" style="--c:${g.color}"><span class="bits">${shown}</span>${signal(groups.join(''), g.color)}</div>`;
+}
+function joinedHTML(){
+  return `<span class="blk data joined">"${plan.segs.map(g => `<span style="color:${g.color}">${esc(g.text)}</span>`).join('')}"</span>`;
+}
+
+/* ================== Plan de la simulación ================== */
+let plan = null, steps = [], cur = -1, state = null, timer = null, playing = false;
+
+function buildPlan(msg, n, shuffle){
+  const chars = Array.from(msg);
+  n = Math.max(1, Math.min(n, chars.length, 10));
+  const base = Math.floor(chars.length/n), rem = chars.length % n;
+  const segs = []; let pos = 0;
+  for (let i=0;i<n;i++){ const len = base + (i<rem?1:0); segs.push({seq:i+1, text:chars.slice(pos,pos+len).join(''), color:SEG_COLORS[i%SEG_COLORS.length]}); pos += len; }
+  const arrival = segs.map((_,i)=>i);
+  if (shuffle && n>1){
+    for (let i=0;i<n-1;i+=2) if (i===0 || Math.random()<0.6) [arrival[i],arrival[i+1]] = [arrival[i+1],arrival[i]];
+  }
+  return {msg, n, segs, arrival};
+}
+
+function buildSteps(){
+  const {msg, n, segs, arrival} = plan, m = esc(msg), hx = hex(msg);
+  const S = []; const add = (side, layer, short, title, text, fn) => S.push({side, layer, short, title, text, fn});
+
+  add('tx',7,'Mensaje creado','El usuario envía un mensaje',
+    `El usuario escribe <b>«${m}»</b> en una aplicación (por ejemplo, un chat). La <b>capa de aplicación</b> es la más cercana al usuario: ofrece los servicios de red a los programas (web, correo, DNS…) y entrega los datos a la capa inferior.`,
+    s => s.tx[7] = plainData(msg));
+  add('tx',6,'Codificación UTF-8','Codificación de los datos',
+    `La <b>capa de presentación</b> se ocupa del <b>formato</b> de la información, para que los dos equipos la interpreten igual. Aquí convierte el texto en bytes con la codificación <b>UTF-8</b>: <code>${hx}</code>. También es la capa donde se <b>cifran</b> o <b>comprimen</b> los datos si hace falta.`,
+    s => s.tx[6] = plainData(msg) + ARROW + hexB(msg) + chip(6,'UTF-8'));
+  add('tx',5,'Apertura de sesión','Apertura de la sesión',
+    `La <b>capa de sesión</b> establece y controla el <b>diálogo</b> entre los dos equipos: abre la sesión, la mantiene mientras dura la comunicación y la cierra al terminar. Le asigna un identificador (<b>SID ${NET.sid}</b>) para saber a qué conversación pertenecen los datos.`,
+    s => s.tx[5] = chip(5,`SID ${NET.sid}`) + hexB(msg));
+  add('tx',4,'Segmentación', n>1 ? `Segmentación en ${n} trozos` : 'Segmentación',
+    n>1
+      ? `La <b>capa de transporte</b> divide los datos en <b>${n} segmentos</b>. Enviar trozos pequeños permite compartir la red con otras comunicaciones y, si uno se pierde, reenviar solo ese. Cada segmento llevará un <b>número de secuencia</b> para poder reordenarlos en el destino.`
+      : `La <b>capa de transporte</b> es la encargada de dividir los datos en segmentos. En este caso los datos son pequeños y caben en <b>un único segmento</b>. Aun así se numerará para que el receptor pueda confirmar que lo ha recibido.`,
+    s => { s.segmented = true; s.tx[4] = ''; });
+
+  const sent = new Set(), received = new Set(), delayedSet = new Set(); let p = 0;
+  segs.forEach((g, i) => {
+    const k = g.seq, tag = `Segmento ${k}/${n}`;
+    add('tx',4,`${tag}: cabecera TCP`,`${tag}: cabecera de transporte`,
+      `Se añade la <b>cabecera TCP</b> al segmento ${k}: <b>puerto origen ${NET.pA}</b> y <b>puerto destino ${NET.pB}</b> (identifican la aplicación en cada extremo) y el <b>número de secuencia ${k}</b>. Datos + cabecera TCP = <b>segmento</b>.`,
+      s => { s.segStatus[i] = 'cur'; s.tx[4] = pdu(g,4); });
+    add('tx',3,`${tag}: cabecera IP`,`${tag}: se forma el paquete`,
+      `La <b>capa de red</b> encapsula el segmento añadiendo la <b>cabecera IP</b> con las direcciones lógicas de origen (<b>${NET.ipA}</b>) y destino (<b>${NET.ipB}</b>). Con ellas los <b>routers</b> deciden por qué camino enviarlo. Segmento + cabecera IP = <b>paquete</b>.`,
+      s => s.tx[3] = pdu(g,3));
+    add('tx',2,`${tag}: MAC + FCS`,`${tag}: se forma la trama`,
+      `La <b>capa de enlace de datos</b> añade una <b>cabecera</b> con las direcciones <b>MAC</b> (físicas, grabadas en la tarjeta de red) de origen y destino, y una <b>cola</b> con el código <b>FCS</b>, que servirá para detectar errores. Paquete + cabecera + cola = <b>trama</b>.`,
+      s => s.tx[2] = pdu(g,2));
+    add('tx',1,`${tag}: a bits`,`${tag}: conversión a bits`,
+      `La <b>capa física</b> convierte la trama en una secuencia de <b>bits</b> (0 y 1) y la transmite como <b>señales</b>: impulsos eléctricos por cable de cobre, luz por fibra óptica u ondas de radio por Wi‑Fi.`,
+      s => s.tx[1] = bitsHTML(g));
+
+    sent.add(i);
+    const deliver = [];
+    while (p < n && sent.has(arrival[p])) deliver.push(arrival[p++]);
+    const late = !deliver.includes(i);
+    if (late) delayedSet.add(i);
+
+    add('net',1, late ? `${tag}: ¡retrasado!` : `${tag}: por el medio`,
+      late ? `${tag} se retrasa en la red` : `${tag} viaja por el medio`,
+      late
+        ? `En una red real cada paquete puede seguir <b>caminos distintos</b>. El segmento ${k} ha tomado una ruta más lenta y <b>llegará después</b> que el siguiente. ¡Veremos cómo lo resuelve la capa de transporte!`
+        : `Los bits recorren el <b>medio de transmisión</b> (cable, fibra, aire…) hasta el equipo receptor. En Internet atravesarían por el camino varios <b>switches</b> y <b>routers</b>.`,
+      s => { s.segStatus[i] = 'sent'; s.flying = {i, half:late}; if (late) s.delayed.push(i); });
+
+    deliver.forEach(d => {
+      const h = segs[d], kk = h.seq, tg = `Segmento ${kk}/${n}`, wasLate = delayedSet.has(d);
+      add('rx',1,`${tg}: bits recibidos`,`${tg}: llegan los bits`,
+        (wasLate ? `Por fin llega el <b>segmento ${kk}</b>, que venía retrasado. ` : '') +
+        `La <b>capa física</b> del receptor capta las señales del medio, las convierte de nuevo en <b>bits</b> y se los pasa a la capa de enlace.`,
+        s => { s.delayed = s.delayed.filter(x => x!==d); s.rx[1] = bitsHTML(h); });
+      add('rx',2,`${tg}: FCS ✓, quita MAC`,`${tg}: se comprueba la trama`,
+        `La <b>capa de enlace</b> comprueba que la <b>MAC destino</b> es la suya y recalcula el <b>FCS</b>: coincide <span class="ok">✓</span>, la trama ha llegado sin errores. <b>Retira la cabecera y la cola</b> (desencapsula) y entrega el paquete a la capa de red.`,
+        s => s.rx[2] = pdu(h,2,2,true));
+      add('rx',3,`${tg}: quita IP`,`${tg}: se comprueba el paquete`,
+        `La <b>capa de red</b> verifica que la <b>IP destino</b> (${NET.ipB}) es la de este equipo. <b>Retira la cabecera IP</b> y entrega el segmento a la capa de transporte.`,
+        s => s.rx[3] = pdu(h,3,3));
+      const missing = segs.filter((x,j) => j<d && !received.has(j)).map(x => x.seq);
+      received.add(d);
+      const left = n - received.size;
+      let t = `La <b>capa de transporte</b> lee el <b>número de secuencia (${kk})</b>, quita la cabecera TCP y guarda los datos en su posición del <b>búfer</b>. Además envía un <b>ACK</b> (confirmación) al emisor.`;
+      if (missing.length) t += ` <b>¡Ha llegado antes que el segmento ${missing.join(', ')}!</b> Gracias al número de secuencia sabe dónde colocarlo y espera a los que faltan.`;
+      else if (wasLate) t += ` Con él se rellena el <b>hueco</b> que quedaba en el búfer.`;
+      if (left>0) t += ` Faltan ${left} segmento${left>1?'s':''}.`;
+      add('rx',4,`${tg}: al búfer + ACK`,`${tg}: al búfer de recepción`, t,
+        s => { s.buffer[d] = true; s.lastBuf = d; s.segStatus[d] = 'ack'; s.rx[4] = pdu(h,4,4); });
+    });
+  });
+
+  add('rx',4,'Reensamblado','Reensamblado de los segmentos',
+    n>1
+      ? `Ya han llegado los <b>${n} segmentos</b>. La capa de transporte los <b>ordena por número de secuencia</b> (1, 2${n>2?', …':''}) y los <b>une</b> para recuperar los datos originales exactamente como se enviaron.`
+      : `Solo había un segmento, así que la capa de transporte ya tiene los datos completos y los entrega a la capa superior.`,
+    s => { s.reassembled = true; s.rx[4] = `<div class="buffer"><span class="lbl">Reensamblado:</span>${segs.map(g=>`<span class="slot full" style="--c:${g.color}"><em>${g.seq}</em>"${esc(g.text)}"</span>`).join('')}</div>` + ARROW + joinedHTML(); });
+  add('rx',5,'Sesión identificada','Entrega a la sesión correcta',
+    `La <b>capa de sesión</b> reconoce la sesión <b>SID ${NET.sid}</b> y entrega los datos a la conversación correcta. Cuando termine el intercambio, se encargará de cerrar la sesión.`,
+    s => s.rx[5] = chip(5,`SID ${NET.sid} ✓`) + hexB(msg));
+  add('rx',6,'Decodificación','Decodificación de los datos',
+    `La <b>capa de presentación</b> hace el proceso inverso: <b>decodifica</b> los bytes UTF-8 (<code>${hx}</code>) y los convierte de nuevo en texto legible. Si hubieran llegado cifrados o comprimidos, aquí se descifrarían o descomprimirían.`,
+    s => s.rx[6] = hexB(msg) + ARROW + plainData(msg));
+  add('rx',7,'¡Mensaje entregado!','¡Mensaje entregado! 🎉',
+    `La <b>aplicación</b> del receptor muestra el mensaje <b>«${m}»</b>. Los datos han bajado por las 7 capas del emisor (<b>encapsulación</b>), han viajado como bits por el medio y han subido por las 7 capas del receptor (<b>desencapsulación</b>).`,
+    s => s.rx[7] = `<div class="bubble">💬 ${m}</div>`);
+  return S;
+}
+
+function freshState(){
+  return {tx:{}, rx:{}, segmented:false, reassembled:false,
+    segStatus: plan.segs.map(()=> 'pend'), buffer: plan.segs.map(()=> false),
+    delayed:[], flying:null, lastBuf:null};
+}
+
+/* ================== Escenario ================== */
+function initStage(){
+  const card = (side,l,col) => `<div class="card" id="${side}${l}" style="--lc:var(--l${l});grid-column:${col};grid-row:${9-l}">
+      <div class="ch"><span class="num">${l}</span><div class="nm"><b>${LAYERS[l].n}</b><small title="${LAYERS[l].role}">${LAYERS[l].role}</small></div><span class="tag">${LAYERS[l].pdu}</span></div>
+      <div class="body" id="${side}${l}b"></div></div>`;
+  let h = `<div class="colhead tx" style="grid-column:1;grid-row:1">💻 <b>Emisor</b> PC‑A <small>${NET.ipA}</small><span class="dir">▼ Encapsulación</span></div>`;
+  for (let l=7;l>=1;l--) h += card('tx',l,1);
+  h += `<div class="colhead mid" style="grid-column:2;grid-row:1">Capas pares</div>`;
+  for (let l=7;l>=2;l--) h += `<div class="peer" id="peer${l}" style="grid-column:2;grid-row:${9-l};--lc:var(--l${l})"><span>${LAYERS[l].pdu}</span></div>`;
+  h += `<div class="wire" id="wire" style="grid-column:2;grid-row:8"><div class="cloud" id="cloud"></div><div class="cable"></div><div id="fly"></div><span class="wlabel">Medio físico</span></div>`;
+  h += `<div class="colhead rx" style="grid-column:3;grid-row:1">🖥️ <b>Receptor</b> PC‑B <small>${NET.ipB}</small><span class="dir">▲ Desencapsulación</span></div>`;
+  for (let l=7;l>=1;l--) h += card('rx',l,3);
+  $('stage').innerHTML = h;
+}
+
+function segListHTML(s){
+  const ic = {pend:'⏳', cur:'▶', sent:'📤', ack:'✅'};
+  return `<div class="seglist">${plan.segs.map((g,i)=>`<span class="segchip ${s.segStatus[i]}" style="--c:${g.color}" title="${{pend:'Pendiente',cur:'Enviando',sent:'Enviado',ack:'Confirmado (ACK)'}[s.segStatus[i]]}"><em>${g.seq}</em>"${esc(g.text)}"<i>${ic[s.segStatus[i]]}</i></span>`).join('')}</div>`;
+}
+function bufferHTML(s){
+  return `<div class="buffer"><span class="lbl">Búfer:</span>${plan.segs.map((g,i)=> s.buffer[i]
+    ? `<span class="slot full${s.lastBuf===i?' new':''}" style="--c:${g.color}"><em>${g.seq}</em>"${esc(g.text)}"</span>`
+    : `<span class="slot"><em>${g.seq}</em> ? </span>`).join('')}</div>`;
+}
+
+function dur(){ return SPEEDS[$('speed').value-1]; }
+
+function render(){
+  const s = state, st = cur>=0 ? steps[cur] : null;
+  for (const side of ['tx','rx']) for (let l=1;l<=7;l++){
+    let h = s ? (s[side][l] || '') : '';
+    if (s && side==='tx' && l===4 && s.segmented) h = segListHTML(s) + h;
+    if (s && side==='rx' && l===4 && !s.reassembled && s.buffer.some(Boolean)) h += bufferHTML(s);
+    $(side+l+'b').innerHTML = h || '<span class="empty">—</span>';
+    const c = $(side+l);
+    c.classList.toggle('active', !!st && st.side===side && st.layer===l);
+    c.classList.toggle('used', !!h);
+  }
+  for (let l=2;l<=7;l++) $('peer'+l).classList.toggle('on', !!st && st.side==='rx' && st.layer===l);
+  // medio físico
+  const fly = $('fly'); fly.innerHTML = '';
+  if (s && s.flying){
+    const g = plan.segs[s.flying.i];
+    fly.innerHTML = `<span class="pill fly${s.flying.half?' half':''}" style="--c:${g.color};--d:${Math.round(dur()*.8)}ms">${g.seq}·0101…</span>`;
+  }
+  $('cloud').innerHTML = s && s.delayed.length
+    ? '🐢 ' + s.delayed.map(i=>`<span class="pill" style="--c:${plan.segs[i].color}">seg ${plan.segs[i].seq}</span>`).join('')
+    : '';
+  $('wire').classList.toggle('on', !!st && st.layer===1);
+  // explicación
+  const ex = $('explain');
+  if (!st){
+    ex.style.setProperty('--ec','var(--l1)');
+    $('exBadge').textContent = 'Preparado';
+    $('exStep').textContent = '';
+    $('exTitle').textContent = 'Empieza la simulación';
+    $('exText').innerHTML = 'Escribe un <b>mensaje</b>, elige en cuántos <b>segmentos</b> quieres dividirlo y pulsa <b>✉️ Enviar</b>. Puedes avanzar automáticamente o paso a paso con los botones <b>⏮ ⏭</b>. Activa <b>«Llegada desordenada»</b> para ver cómo la capa de transporte reordena los segmentos.';
+    $('exPdu').innerHTML = '';
+    $('prog').style.width = '0';
+  } else {
+    ex.style.setProperty('--ec', `var(--l${st.layer})`);
+    $('exBadge').textContent = st.side==='net' ? '🌐 Medio de transmisión'
+      : `${st.side==='tx'?'💻 Emisor':'🖥️ Receptor'} · Capa ${st.layer} · ${LAYERS[st.layer].n}`;
+    $('exStep').textContent = `Paso ${cur+1} / ${steps.length}`;
+    $('exTitle').textContent = st.title;
+    $('exText').innerHTML = st.text;
+    const dir = st.side==='tx' ? 'Encapsulación ▼' : st.side==='rx' ? 'Desencapsulación ▲' : 'Transmisión ➜';
+    $('exPdu').innerHTML = `Unidad de datos (PDU): <b>${LAYERS[st.layer].pdu}</b> · ${dir}`;
+    $('prog').style.width = ((cur+1)/steps.length*100) + '%';
+    ex.classList.remove('anim'); void ex.offsetWidth; ex.classList.add('anim');
+  }
+  renderLog();
+  $('btnPrev').disabled = cur<=0;
+  $('btnNext').disabled = !!plan && cur>=steps.length-1;
+}
+
+function renderLog(){
+  const log = $('log');
+  if (cur<0){ log.innerHTML = '<li style="cursor:default">Todavía no hay pasos.</li>'; return; }
+  const lbl = {tx:'Emisor', rx:'Receptor', net:'Medio'};
+  log.innerHTML = steps.slice(0,cur+1).map((st,j)=>
+    `<li data-i="${j}" class="${j===cur?'cur':''}"><span class="dot" style="background:var(--l${st.layer})"></span>${lbl[st.side]}${st.side!=='net'?' · C'+st.layer:''} — ${st.short}</li>`).join('');
+  const box = $('logscroll'), li = log.lastElementChild;
+  box.scrollTop = li.offsetTop - box.clientHeight + li.offsetHeight + 4;
+}
+
+/* ================== Control ================== */
+function goTo(i){
+  cur = i; state = freshState();
+  for (let j=0;j<=i;j++){ state.flying = null; state.lastBuf = null; steps[j].fn(state); }
+  render();
+  if (i === steps.length-1) confetti();
+}
+function schedule(){
+  clearTimeout(timer);
+  if (!playing) return;
+  timer = setTimeout(() => {
+    if (cur < steps.length-1){ goTo(cur+1); schedule(); } else setPlaying(false);
+  }, dur());
+}
+function setPlaying(p){
+  playing = p;
+  $('btnPlay').innerHTML = p ? '⏸ Pausa' : '▶ Reproducir';
+  if (p) schedule(); else clearTimeout(timer);
+}
+function start(autoplay){
+  const msg = $('msg').value;
+  if (!msg.trim()){ const b=$('msg'); b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); b.focus(); return false; }
+  const n = parseInt($('nseg').value,10) || 1;
+  plan = buildPlan(msg, n, $('shuffle').checked);
+  $('nseg').value = plan.n;
+  steps = buildSteps();
+  goTo(0);
+  setPlaying(autoplay);
+  return true;
+}
+function reset(){
+  setPlaying(false); plan = null; steps = []; cur = -1; state = null; render();
+}
+function updateHint(){
+  const len = Array.from($('msg').value).length;
+  const max = Math.max(1, Math.min(10, len));
+  $('nseg').max = max;
+  $('nsegHint').textContent = `máx. ${max}`;
+}
+
+$('btnSend').onclick = () => start(true);
+$('btnPlay').onclick = () => {
+  if (!plan) return start(true);
+  if (playing) return setPlaying(false);
+  if (cur >= steps.length-1) goTo(0);
+  setPlaying(true);
+};
+$('btnNext').onclick = () => { if (!plan) return start(false); setPlaying(false); if (cur<steps.length-1) goTo(cur+1); };
+$('btnPrev').onclick = () => { setPlaying(false); if (cur>0) goTo(cur-1); };
+$('btnReset').onclick = reset;
+$('speed').oninput = () => { if (playing) schedule(); };
+$('msg').oninput = updateHint;
+$('msg').onkeydown = e => { if (e.key==='Enter') start(true); };
+$('log').onclick = e => { const li = e.target.closest('li[data-i]'); if (li){ setPlaying(false); goTo(+li.dataset.i); } };
+document.addEventListener('keydown', e => {
+  if (e.target.tagName==='INPUT' && e.target.type!=='range' && e.target.type!=='checkbox') return;
+  if (e.key==='ArrowRight'){ e.preventDefault(); $('btnNext').click(); }
+  else if (e.key==='ArrowLeft'){ e.preventDefault(); $('btnPrev').click(); }
+  else if (e.key===' '){ e.preventDefault(); $('btnPlay').click(); }
+});
+
+function confetti(){
+  const colors = ['--l7','--l6','--l5','--l4','--l3','--l2','--l1'];
+  for (let i=0;i<90;i++){
+    const d = document.createElement('div');
+    d.className = 'confetti';
+    d.style.left = Math.random()*100 + 'vw';
+    d.style.background = `var(${colors[i%7]})`;
+    d.style.animationDuration = (2 + Math.random()*2.2) + 's';
+    d.style.animationDelay = (Math.random()*.6) + 's';
+    d.style.borderRadius = Math.random()<.4 ? '50%' : '2px';
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 5200);
+  }
+}
+
+initStage();
+updateHint();
+render();
+</script>
+</body>
+</html>
