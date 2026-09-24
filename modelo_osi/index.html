@@ -525,10 +525,28 @@ function goTo(i){
     if (!plan.counted){ plan.counted = true; track('osi-completado', 'Simulación completada'); }
   }
 }
-/* Estadísticas anónimas con GoatCounter (sin cookies) */
-function track(path, title){
-  try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({path, title, event:true}); } catch(e){}
+/* Estadísticas anónimas con GoatCounter (sin cookies). Se envía directamente al panel,
+   sin cargar gc.zgo.at, que muchos bloqueadores y filtros DNS bloquean. */
+const GC_URL = 'https://smx-vivalls.goatcounter.com/count';
+function gcSkip(){ try { return localStorage.getItem('skipgc') === 't'; } catch(e){ return false; } }
+function gcHit(path, title, event){
+  if (!/^https?:$/.test(location.protocol) || /^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname) || gcSkip() || navigator.webdriver) return;
+  const q = new URLSearchParams({
+    p: path, t: title || document.title, e: event ? 'true' : 'false',
+    r: event ? '' : document.referrer,
+    s: [screen.width, screen.height, window.devicePixelRatio || 1].join(','),
+    rnd: Math.random().toString(36).slice(2)
+  });
+  try { new Image().src = GC_URL + '?' + q; } catch(e){}
 }
+function track(path, title){ gcHit(path, title, true); }
+if (location.hash === '#toggle-goatcounter'){
+  try {
+    if (gcSkip()){ localStorage.removeItem('skipgc'); alert('GoatCounter: las visitas de este navegador VUELVEN a contarse.'); }
+    else { localStorage.setItem('skipgc','t'); alert('GoatCounter: las visitas de este navegador YA NO se cuentan.'); }
+  } catch(e){}
+}
+gcHit(location.pathname, document.title, false);
 function schedule(){
   clearTimeout(timer);
   if (!playing) return;
@@ -605,6 +623,5 @@ initStage();
 updateHint();
 render();
 </script>
-<script data-goatcounter="https://smx-vivalls.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
