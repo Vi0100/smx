@@ -534,7 +534,7 @@ function gcHit(path, title, event){
   const q = new URLSearchParams({
     p: path, t: title || document.title, e: event ? 'true' : 'false',
     r: event ? '' : document.referrer,
-    s: [screen.width, screen.height, window.devicePixelRatio || 1].join(','),
+    s: screen.width,
     rnd: Math.random().toString(36).slice(2)
   });
   try { new Image().src = GC_URL + '?' + q; } catch(e){}
