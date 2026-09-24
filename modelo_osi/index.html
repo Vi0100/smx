@@ -520,7 +520,14 @@ function goTo(i){
   cur = i; state = freshState();
   for (let j=0;j<=i;j++){ state.flying = null; state.lastBuf = null; steps[j].fn(state); }
   render();
-  if (i === steps.length-1) confetti();
+  if (i === steps.length-1){
+    confetti();
+    if (!plan.counted){ plan.counted = true; track('osi-completado', 'Simulación completada'); }
+  }
+}
+/* Estadísticas anónimas con GoatCounter (sin cookies) */
+function track(path, title){
+  try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({path, title, event:true}); } catch(e){}
 }
 function schedule(){
   clearTimeout(timer);
@@ -541,6 +548,9 @@ function start(autoplay){
   plan = buildPlan(msg, n, $('shuffle').checked);
   $('nseg').value = plan.n;
   steps = buildSteps();
+  track('osi-enviar', 'Pulsa Enviar');
+  track(`osi-segmentos-${plan.n}`, `Segmentos: ${plan.n}`);
+  if ($('shuffle').checked) track('osi-desordenado', 'Llegada desordenada');
   goTo(0);
   setPlaying(autoplay);
   return true;
@@ -595,5 +605,6 @@ initStage();
 updateHint();
 render();
 </script>
+<script data-goatcounter="https://smx-vivalls.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
