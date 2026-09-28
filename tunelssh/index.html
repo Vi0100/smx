@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador túnel SSH</title>
+<style>
+:root{
+  --bg:#f6f1ea; --card:#ffffff; --ink:#2b2118; --muted:#7d6f63; --line:#ebe2d8;
+  --green:#3a9d74; --green-d:#2c7a5a; --brown:#7a4a2e; --dim:#ddd3c9; --accent:#e0662b;
+  --plain:#e0901e; --sym:#16a34a; --red:#dc2626; --blue:#2563eb;
+  --c1:#7c3aed; --c2:#2563eb; --c3:#e0662b; --c4:#16a34a;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink);
+  background:
+    radial-gradient(1100px 600px at 5% -10%, #e2ecf7 0%, transparent 60%),
+    radial-gradient(900px 500px at 105% 0%, #e2f2e9 0%, transparent 60%),
+    var(--bg);
+  min-height:100vh;
+}
+header{max-width:1440px;margin:0 auto;padding:22px 16px 6px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 24px;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:grid;place-items:center;color:#fff;font:700 15px ui-monospace,Consolas,monospace;box-shadow:0 6px 18px rgba(37,99,235,.35)}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}
+.sub{margin:2px 0 0;color:var(--muted);font-size:14px}
+.phases{display:flex;flex-wrap:wrap;gap:6px}
+.phase{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:13px;color:var(--muted);transition:.3s}
+.phase b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--dim);color:#fff;font-size:11px}
+.phase.done{color:var(--brown)} .phase.done b{background:var(--brown)}
+.phase.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(224,102,43,.35)} .phase.active b{background:#fff;color:var(--accent)}
+
+.layout{max-width:1440px;margin:0 auto;padding:12px 16px 28px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 28px rgba(70,45,20,.07);padding:16px}
+.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:flex;align-items:center;gap:8px}
+
+/* ---------- Esquema ---------- */
+#scheme{width:100%;height:auto;display:block}
+.zone rect{stroke-width:1.5;stroke-dasharray:6 5}
+.zone text{font-weight:700;font-size:15px}
+.box{transform-box:fill-box;transform-origin:center}
+.box rect.b{stroke-width:2;transition:filter .3s,stroke .3s}
+.box text{text-anchor:middle}
+.box .name{font-size:17px;font-weight:700;fill:#fff}
+.box .ico{font-size:22px}
+.box.hl rect.b{stroke:var(--accent)!important;stroke-width:4;filter:url(#glow)}
+.box.pulse{animation:pulse .7s ease}
+@keyframes pulse{0%{transform:scale(1)}40%{transform:scale(1.07)}100%{transform:scale(1)}}
+.ip{font:600 14px ui-monospace,Consolas,monospace;fill:var(--ink);text-anchor:middle}
+.path{fill:none;stroke:#cfc4b8;stroke-width:3;transition:stroke .3s}
+.path.on{stroke:var(--accent);stroke-width:4;stroke-dasharray:12 7;animation:dash 1s linear infinite}
+#pDirect.on{stroke:var(--red)}
+@keyframes dash{to{stroke-dashoffset:-19}}
+#pLogical{stroke-dasharray:3 7;stroke-linecap:round}
+#pLogical.lit{stroke:var(--blue);stroke-width:3.5;animation:dash 1.2s linear infinite}
+#logicalLbl{opacity:0;transition:opacity .5s} #logicalLbl.on{opacity:1}
+#tube{fill:none;stroke:#86efac;stroke-width:26;stroke-linecap:round;opacity:0;transition:opacity .5s}
+#tube.open{opacity:.9}
+#tubeGlow{fill:none;stroke:#22c55e;stroke-width:40;stroke-linecap:round;opacity:0;transition:opacity .5s}
+#tubeGlow.open{opacity:.18}
+#tubeLbl{opacity:0;transition:opacity .5s} #tubeLbl.on{opacity:1}
+#listen{opacity:0;transition:opacity .5s} #listen.on{opacity:1}
+.lbl{font-size:13.5px;fill:var(--muted)}
+.lbl.strong{font-weight:700;fill:var(--ink)}
+#fw{transform-box:fill-box;transform-origin:center}
+#fw.block rect.b{filter:url(#glowR)} #fw.block{animation:shake .45s}
+#fw.pass rect.b{filter:url(#glowG)}
+#fw.hl rect.b{filter:url(#glow)}
+@keyframes shake{20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}
+.pkt rect{stroke:#fff;stroke-width:2;filter:drop-shadow(0 3px 5px rgba(0,0,0,.25))}
+.pkt text{fill:#fff;font:700 13px system-ui,Segoe UI,sans-serif;text-anchor:middle}
+.pkt.plain rect{fill:var(--plain)} .pkt.sym rect{fill:var(--sym)} .pkt.ssh rect{fill:#0ea5e9} .pkt.dead rect{fill:var(--red)}
+
+/* ---------- Controles ---------- */
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
+button{font:600 14px system-ui,Segoe UI,sans-serif;border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 14px;border-radius:11px;cursor:pointer;transition:.15s}
+button:hover{border-color:var(--brown);transform:translateY(-1px)}
+button.primary{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;border:none;box-shadow:0 4px 14px rgba(58,157,116,.35)}
+button.playing{background:var(--accent);color:#fff;border-color:var(--accent)}
+button:disabled{opacity:.4;cursor:default;transform:none}
+.speed{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-left:auto}
+.counter{font:600 13px ui-monospace,Consolas,monospace;color:var(--muted)}
+.progress{height:5px;border-radius:5px;background:var(--line);margin-top:10px;overflow:hidden}
+.progress div{height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--accent));transition:width .4s}
+
+/* ---------- Explicación ---------- */
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:#fdebe1;color:var(--accent);margin-bottom:8px}
+.explain h2{margin:0 0 10px;font-size:22px;letter-spacing:-.01em}
+.explain .txt{font-size:15.5px;line-height:1.6}
+.explain code,.tip code{background:#f3ece4;padding:1px 6px;border-radius:6px;font-size:.9em;font-family:ui-monospace,Consolas,monospace}
+.tip{margin-top:14px;padding:11px 14px;border-radius:12px;background:#eef7f2;border-left:4px solid var(--green);font-size:14px;line-height:1.5}
+.tip.warn{background:#fff4e5;border-left-color:var(--plain)}
+.fade{animation:fadeUp .45s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.cmd{margin:12px 0 6px;padding:12px 14px;border-radius:12px;background:#1b1d23;color:#e5e7eb;font:600 15px ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
+.cmd .c1{color:#c4b5fd} .cmd .c2{color:#93c5fd} .cmd .c3{color:#fdba74} .cmd .c4{color:#86efac}
+.parts{display:grid;gap:6px;margin-top:8px}
+.parts div{display:flex;gap:10px;align-items:baseline;font-size:14px}
+.parts b{font-family:ui-monospace,Consolas,monospace;min-width:120px;padding:2px 8px;border-radius:6px;color:#fff;text-align:center}
+table.seg{width:100%;border-collapse:collapse;margin-top:10px;font-size:13.5px}
+table.seg th,table.seg td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.seg th{font-size:12px;text-transform:uppercase;color:var(--muted)}
+table.seg code{font-size:12px}
+.ok{color:#166534;font-weight:700} .bad{color:#b91c1c;font-weight:700}
+
+/* ---------- Fila inferior ---------- */
+.bottom{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);gap:16px}
+.term{background:#0c2340;border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 1px #1e3a5f}
+.term .bar{display:flex;gap:6px;align-items:center;padding:8px 12px;background:#15325a}
+.term .bar i{width:11px;height:11px;border-radius:50%;display:block}
+.term .bar span{margin-left:8px;color:#a9c1e0;font-size:12px}
+.term pre{margin:0;padding:12px 14px;height:260px;overflow:auto;color:#e2e8f0;font:13px/1.55 ui-monospace,Consolas,"Courier New",monospace;white-space:pre-wrap;word-break:break-word}
+.term .p{color:#fde047} .term .in{color:#fff;font-weight:700} .term .dimt{color:#94a3b8} .term .cm{color:#86efac;font-style:italic} .term .er{color:#fca5a5}
+.term .nl{animation:fadeUp .4s}
+.cursor{display:inline-block;width:8px;height:15px;background:#fde047;vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.fwlog{height:296px;overflow:auto;font:12px/1.45 ui-monospace,Consolas,monospace;border-radius:12px;border:1px solid var(--line);background:#fcfaf7}
+.fwlog div{padding:7px 10px;border-bottom:1px solid var(--line)}
+.fwlog .block{background:#fee2e2;color:#991b1b}
+.fwlog .allow{background:#ecfdf3;color:#166534}
+.fwlog .new{animation:fadeUp .45s}
+.fwlog small{display:block;opacity:.75;margin-top:2px}
+.empty{color:var(--muted);font-style:italic;padding:14px;text-align:center}
+.rdp{border-radius:12px;overflow:hidden;border:1px solid #cbd5e1;height:296px;display:flex;flex-direction:column}
+.rdp .tb{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f1f5f9;font-size:12.5px;color:#334155;border-bottom:1px solid #e2e8f0}
+.rdp .tb span:last-child{margin-left:auto;letter-spacing:6px;color:#64748b}
+.rdp .scr{flex:1;position:relative;display:grid;place-items:center;text-align:center;font-size:14px;color:#64748b;background:#f8fafc}
+.rdp .scr.on{background:linear-gradient(135deg,#0ea5e9 0%,#1d4ed8 55%,#312e81 100%);color:#fff;place-items:start;animation:fadeUp .6s}
+.rdp .scr.err{background:#fff7f7;color:#b91c1c}
+.icons{display:grid;gap:14px;padding:14px;font-size:11px;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.icons div{display:flex;flex-direction:column;align-items:center;width:64px}
+.icons span{font-size:28px}
+.task{position:absolute;left:0;right:0;bottom:0;height:32px;background:rgba(15,23,42,.8);display:flex;align-items:center;gap:10px;padding:0 10px;font-size:12px}
+.spin{width:26px;height:26px;border-radius:50%;border:3px solid #cbd5e1;border-top-color:#2563eb;animation:spin 1s linear infinite;margin:0 auto 8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media (max-width:1100px){
+  .layout{grid-template-columns:1fr}
+  .bottom{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">-L</div>
+    <div>
+      <h1>Simulador de túnel SSH</h1>
+      <p class="sub">Redirección de puertos local (<i>Local Port Forwarding</i>) con <code>ssh -L</code></p>
+    </div>
+  </div>
+  <div class="phases" id="phases"></div>
+</header>
+
+<main class="layout">
+  <section class="card">
+    <h3>📡 Esquema de red</h3>
+    <svg id="scheme" viewBox="0 0 1000 480" role="img" aria-label="Esquema de un túnel SSH local">
+      <defs>
+        <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#44ad83"/><stop offset="1" stop-color="#2f8a64"/></linearGradient>
+        <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+        <pattern id="bricks" width="30" height="16" patternUnits="userSpaceOnUse">
+          <rect width="30" height="16" fill="#9a3412"/>
+          <path d="M0 0.5 H30 M0 8.5 H30 M15 0 V8 M0 8 V16 M30 8 V16" stroke="#fed7aa" stroke-width="1.2"/>
+        </pattern>
+        <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#e0662b" flood-opacity=".7"/></filter>
+        <filter id="glowG" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#16a34a" flood-opacity=".7"/></filter>
+        <filter id="glowR" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#dc2626" flood-opacity=".9"/></filter>
+      </defs>
+
+      <!-- Redes -->
+      <g class="zone"><rect x="15" y="20" width="300" height="445" rx="16" fill="#eef4ff" stroke="#93c5fd"/><text x="165" y="452" text-anchor="middle" fill="#1d4ed8">Red A · 172.16.0.0/16</text></g>
+      <g class="zone"><rect x="490" y="150" width="500" height="315" rx="16" fill="#edf8f1" stroke="#86efac"/><text x="740" y="452" text-anchor="middle" fill="#166534">Red B · 192.168.0.0/24</text></g>
+
+      <!-- Conexión lógica -->
+      <path id="pLogical" class="path" d="M242 76 C 560 10, 870 50, 905 222"/>
+      <g id="logicalLbl"><rect x="505" y="20" width="250" height="26" rx="13" fill="#dbeafe"/><text x="630" y="38" text-anchor="middle" font-size="13" font-weight="700" fill="#1d4ed8">Lo que «cree» MSTSC: conexión directa</text></g>
+
+
+      <!-- Otros caminos -->
+      <path id="pApp" class="path" d="M140 112 V224"/>
+      <text class="lbl strong" x="130" y="172" text-anchor="end">localhost</text>
+      <text class="lbl strong" x="130" y="189" text-anchor="end">:9090</text>
+      <path id="pDirect" class="path" d="M217 262 H368"/>
+      <text class="lbl" x="292" y="252" text-anchor="middle">RDP 3389</text>
+      <path id="pHost" class="path" d="M742 282 H828"/>
+      <text class="lbl strong" x="785" y="268" text-anchor="middle">RDP 3389</text>
+      <text class="lbl" x="785" y="302" text-anchor="middle" font-style="italic">pivoting</text>
+
+      <!-- Cortafuegos -->
+      <text x="402" y="140" text-anchor="middle" font-weight="700" font-size="14">🧱 Cortafuegos</text>
+      <g id="fw"><rect class="b" x="372" y="150" width="60" height="250" rx="4" fill="url(#bricks)" stroke="#7c2d12" stroke-width="2"/></g>
+      <text x="402" y="420" text-anchor="middle" font-size="12.5" fill="#166534" font-weight="700">✔ 22/TCP</text>
+      <text x="402" y="434" text-anchor="middle" font-size="12.5" fill="#b91c1c" font-weight="700">✖ 3389/TCP</text>
+
+      <!-- Túnel -->
+      <path id="tubeGlow" d="M217 318 H588"/>
+      <path id="tube" d="M217 318 H588"/>
+      <path id="pTunnel" class="path" d="M217 318 H588"/>
+      <g id="tubeLbl"><rect x="302" y="348" width="200" height="26" rx="13" fill="#fff" stroke="#16a34a"/><text x="402" y="366" text-anchor="middle" font-size="13" font-weight="700" fill="#166534">🔒 Túnel SSH · puerto 22</text></g>
+
+      <!-- Equipos -->
+      <g id="app" class="box">
+        <rect class="b" x="40" y="40" width="200" height="72" rx="10" fill="#fff" stroke="#93c5fd"/>
+        <rect x="40" y="40" width="200" height="20" rx="10" fill="#dbeafe"/><rect x="40" y="52" width="200" height="8" fill="#dbeafe"/>
+        <text x="140" y="55" font-size="11" fill="#1e3a8a" font-weight="700">MSTSC (Escritorio remoto)</text>
+        <text x="140" y="92" font-size="16" font-weight="700" fill="#1e3a8a" font-family="ui-monospace,Consolas,monospace">localhost:9090</text>
+      </g>
+      <g id="cli" class="box">
+        <rect class="b" x="65" y="224" width="152" height="104" rx="10" fill="url(#gBlue)" stroke="#1e40af"/>
+        <text class="ico" x="141" y="258">💻</text>
+        <text class="name" x="141" y="284">Cliente</text>
+        <text class="name" x="141" y="306">SSH</text>
+      </g>
+      <text class="ip" x="141" y="352">172.16.0.20</text>
+      <g id="listen"><rect x="150" y="190" width="150" height="24" rx="12" fill="#7c3aed"/><text x="225" y="207" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">👂 escuchando :9090</text></g>
+
+      <g id="srv" class="box">
+        <rect class="b" x="590" y="224" width="152" height="104" rx="10" fill="url(#gGreen)" stroke="#2c7a5a"/>
+        <text class="ico" x="666" y="258">🖥️</text>
+        <text class="name" x="666" y="284">Servidor</text>
+        <text class="name" x="666" y="306">SSH</text>
+      </g>
+      <text class="ip" x="666" y="352">192.168.0.15</text>
+
+      <g id="host" class="box">
+        <rect class="b" x="830" y="224" width="140" height="104" rx="10" fill="#475569" stroke="#334155"/>
+        <text class="ico" x="900" y="258">🖥️</text>
+        <text class="name" x="900" y="284">Host</text>
+        <text class="name" x="900" y="306">RDP</text>
+      </g>
+      <text class="ip" x="900" y="352">192.168.0.10</text>
+
+      <g id="pktLayer"></g>
+    </svg>
+
+    <div class="controls">
+      <button id="reset">⟲ Reiniciar</button>
+      <button id="prev" title="Anterior (←)">◀ Anterior</button>
+      <button id="next" class="primary" title="Siguiente (→ o espacio)">Siguiente ▶</button>
+      <button id="play">⏵ Auto</button>
+      <span class="counter" id="counter"></span>
+      <label class="speed">Velocidad
+        <input type="range" id="speed" min="0.5" max="2" step="0.25" value="1">
+        <span id="speedv">1x</span>
+      </label>
+    </div>
+    <div class="progress"><div id="bar"></div></div>
+  </section>
+
+  <section class="card explain" id="explain"></section>
+
+  <div class="bottom">
+    <section class="card">
+      <h3>⌨️ Terminal del cliente (172.16.0.20)</h3>
+      <div class="term">
+        <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span>Windows PowerShell</span></div>
+        <pre id="term"></pre>
+      </div>
+    </section>
+    <section class="card">
+      <h3>🧱 Registro del cortafuegos</h3>
+      <div class="fwlog" id="fwlog"></div>
+    </section>
+    <section class="card">
+      <h3>🖥️ Conexión a Escritorio remoto</h3>
+      <div class="rdp">
+        <div class="tb"><span>🖥️</span><span id="rdpTitle">Conexión a Escritorio remoto</span><span>–▢✕</span></div>
+        <div class="scr" id="rdpScr"></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const PHASES = ["El problema","Crear el túnel","Tráfico por el túnel","Resumen"];
+const CMD = `<div class="cmd">ssh <span class="c1">-L 9090</span>:<span class="c2">192.168.0.10</span>:<span class="c3">3389</span> <span class="c4">alumno@192.168.0.15</span></div>`;
+const PARTS = `<div class="parts">
+<div><b style="background:var(--c1)">-L 9090</b>Puerto <b style="background:none;color:var(--ink);min-width:0;padding:0">local</b> donde escuchará el cliente SSH</div>
+<div><b style="background:var(--c2)">192.168.0.10</b>Host remoto al que queremos llegar (visto <i>desde el servidor</i>)</div>
+<div><b style="background:var(--c3)">3389</b>Puerto remoto del servicio (RDP)</div>
+<div><b style="background:var(--c4)">alumno@192.168.0.15</b>Servidor SSH que hará de puente</div>
+</div>`;
+const SEGMENTS = `<table class="seg">
+<tr><th>Tramo</th><th>Conexión</th><th>¿Cifrado por SSH?</th></tr>
+<tr><td>① MSTSC → cliente SSH</td><td><code>127.0.0.1 → 127.0.0.1:9090</code><br>(dentro del propio equipo)</td><td>No hace falta: no sale a la red</td></tr>
+<tr><td>② Cliente → servidor SSH</td><td><code>172.16.0.20 → 192.168.0.15:22</code></td><td class="ok">✔ Sí, es el túnel</td></tr>
+<tr><td>③ Servidor SSH → host RDP</td><td><code>192.168.0.15 → 192.168.0.10:3389</code></td><td class="bad">✖ No (sale del túnel)</td></tr>
+</table>`;
+
+/* Campos de cada paso:
+   ph fase · title · text · tip/warn
+   pkts: [[camino, inverso?, etiqueta, tipo, destinoPulso]]   (se animan en secuencia)
+   hl: ids a resaltar · set: estado acumulado (tunnel, listen, logical, rdp)
+   term: [[clase, texto]] · fw: [[allow|block, texto, detalle]] */
+const STEPS = [
+ {ph:1, title:"El escenario", hl:["cli","host"],
+  text:`El alumno está en su equipo, el <b>Cliente SSH</b> (<code>172.16.0.20</code>), dentro de la <b>Red A</b>.<br><br>Quiere conectarse por <b>Escritorio remoto</b> (RDP, puerto <b>3389</b>) al <b>Host RDP</b> (<code>192.168.0.10</code>), que está en otra red, la <b>Red B</b>.<br><br>Entre las dos redes hay un <b>cortafuegos</b>.`,
+  tip:`Pulsa <b>Siguiente</b> (o la tecla →) para avanzar. Abajo tienes la terminal del cliente, el registro del cortafuegos y la ventana de Escritorio remoto.`,
+  term:[["p","PS C:\\Users\\alumno> "]], set:{rdp:"off"}},
+ {ph:1, title:"Intento directo: ¡bloqueado!", hl:["fw"],
+  pkts:[["pDirect",false,"RDP → :3389","plain","block"]],
+  text:`El alumno abre <code>mstsc</code> e intenta conectarse directamente a <code>192.168.0.10</code>.<br><br>El paquete llega al cortafuegos… y se <b>descarta</b>. La política de la empresa solo permite pasar el tráfico <b>SSH (puerto 22)</b> hacia la Red B. El puerto 3389 está cerrado.`,
+  tip:`Es una configuración muy habitual: abrir un único puerto seguro (SSH) en lugar de exponer muchos servicios.`,
+  term:[["in","mstsc /v:192.168.0.10\n"],["p","PS C:\\Users\\alumno> "]],
+  fw:[["block","DROP TCP 172.16.0.20:51000 → 192.168.0.10:3389","Regla: RDP no permitido entre Red A y Red B"]],
+  set:{rdp:"err"}},
+ {ph:2, title:"La idea: meter RDP dentro de SSH", hl:["fw","srv"],
+  text:`El cortafuegos no deja pasar RDP… pero <b>sí deja pasar SSH</b> hacia el <b>Servidor SSH</b> (<code>192.168.0.15</code>), que está en la Red B junto al host RDP.<br><br>La solución es un <b>túnel SSH</b>: el tráfico RDP se <b>encapsula</b> dentro de la conexión SSH. El cortafuegos solo ve tráfico SSH cifrado por el puerto 22 y lo deja pasar.<br><br>Al otro lado, el servidor SSH saca el tráfico RDP del túnel y lo entrega al host RDP.`,
+  tip:`Es como meter una carta (RDP) dentro de un sobre de otra empresa de mensajería (SSH) que sí tiene permiso para cruzar la frontera.`},
+ {ph:2, title:"El comando ssh -L", hl:["cli"],
+  text:`El alumno crea el túnel con la opción <code>-L</code> (<i>Local Port Forwarding</i>). La sintaxis es:<br><code>ssh -L &lt;puerto-local&gt;:&lt;host-remoto&gt;:&lt;puerto-remoto&gt; &lt;servidor-ssh&gt;</code>${CMD}${PARTS}`,
+  tip:`Importante: <code>192.168.0.10</code> es la dirección del host <b>tal como la ve el servidor SSH</b>, no el cliente. El cliente no necesita poder llegar a ella directamente.`,
+  term:[["in","ssh -L 9090:192.168.0.10:3389 alumno@192.168.0.15\n"]]},
+ {ph:2, title:"Se establece la conexión SSH", hl:["srv","fw"],
+  pkts:[["pTunnel",false,"SSH :22","ssh","srv"],["pTunnel",true,"SSH OK","ssh","cli"]],
+  text:`El cliente se conecta al servidor SSH por el <b>puerto 22</b>. El cortafuegos lo <b>permite</b>.<br><br>Se hace todo el proceso SSH habitual: acuerdo de algoritmos, verificación de la clave del servidor, clave de sesión y autenticación del usuario.<br><br>🟢 El <b>túnel cifrado</b> ya está abierto.`,
+  tip:`Mientras esta sesión SSH siga abierta, el túnel funciona. Si se cierra la terminal, el túnel desaparece.`,
+  term:[["","alumno@192.168.0.15's password: \n"],["dimt","Linux servidor-ssh 6.1.0-18-amd64 #1 SMP Debian x86_64\n"],["p","alumno@servidor-ssh:~$ "]],
+  fw:[["allow","ACCEPT TCP 172.16.0.20:51022 → 192.168.0.15:22","Regla: SSH permitido · Conexión establecida"]],
+  set:{tunnel:true}},
+ {ph:2, title:"El cliente escucha en el puerto 9090", hl:["cli"],
+  text:`Además de la sesión, el cliente SSH abre un <b>puerto de escucha local</b>: el <b>9090</b> en <code>127.0.0.1</code> (localhost).<br><br>Todo lo que se conecte a <code>localhost:9090</code> será enviado por el túnel hasta el servidor SSH, y este lo reenviará a <code>192.168.0.10:3389</code>.<br><br>En otra ventana, el alumno lo comprueba con <code>netstat</code>.`,
+  tip:`Se usa un puerto alto (9090) porque los puertos por debajo de 1024 requieren permisos de administrador y porque el 3389 local podría estar ya ocupado por el propio Escritorio remoto de Windows.`,
+  term:[["cm","\n# En otra ventana de PowerShell:\n"],["p","PS C:\\Users\\alumno> "],["in","netstat -an | findstr 9090\n"],["","  TCP    127.0.0.1:9090    0.0.0.0:0    LISTENING\n"]],
+  set:{listen:true}},
+ {ph:3, title:"MSTSC se conecta a localhost:9090", hl:["app"],
+  pkts:[["pApp",false,"RDP","plain","cli"]],
+  text:`Ahora el alumno abre Escritorio remoto, pero en lugar de la IP del host escribe <code>localhost:9090</code>.<br><br>MSTSC <b>cree que el servicio RDP está en su propio equipo</b>. El paquete no sale a la red: va del programa MSTSC al cliente SSH, dentro del mismo ordenador.`,
+  term:[["p","PS C:\\Users\\alumno> "],["in","mstsc /v:localhost:9090\n"]],
+  set:{rdp:"connecting"}},
+ {ph:3, title:"El tráfico RDP entra en el túnel", hl:["fw"],
+  pkts:[["pTunnel",false,"🔒 RDP","sym","srv"]],
+  text:`El cliente SSH recoge los datos RDP que le llegan al puerto 9090, los <b>cifra</b> y los mete en la conexión SSH.<br><br>El paquete atraviesa el cortafuegos. ¿Qué ve el cortafuegos? Solo una conexión <b>SSH al puerto 22</b> con datos cifrados. No sabe que dentro va RDP, así que lo deja pasar.`,
+  tip:`Por eso los túneles SSH son tan útiles… y también por eso preocupan a los administradores: permiten saltarse las reglas del cortafuegos.`, warn:1,
+  fw:[["allow","ACCEPT TCP 172.16.0.20:51022 → 192.168.0.15:22","SSH · Datos cifrados: 3f a1 9c 07 e2 5b 88 d4 …"]]},
+ {ph:3, title:"El servidor SSH reenvía al host (pivoting)", hl:["srv","host"],
+  pkts:[["pHost",false,"RDP :3389","plain","host"]],
+  text:`El servidor SSH <b>descifra</b> los datos, ve que van destinados a <code>192.168.0.10:3389</code> y abre una conexión normal hacia allí.<br><br>El servidor SSH actúa como <b>puente</b> o <b>pivote</b> (<i>pivoting</i>): usa su posición dentro de la Red B para llegar a equipos a los que el cliente no puede acceder.`,
+  tip:`Para el host RDP, la conexión viene del <b>servidor SSH</b> (<code>192.168.0.15</code>), no del alumno. Este último tramo ya no va dentro del túnel SSH.`},
+ {ph:3, title:"La respuesta hace el camino inverso", hl:["host","srv","cli","app"],
+  pkts:[["pHost",true,"RDP","plain","srv"],["pTunnel",true,"🔒 RDP","sym","cli"],["pApp",true,"RDP","plain","app"]],
+  text:`El host RDP responde. La respuesta hace el camino al revés:<br><br>① Host RDP → servidor SSH (RDP normal)<br>② Servidor SSH → cliente SSH (<b>dentro del túnel, cifrado</b>)<br>③ Cliente SSH → MSTSC (por <code>localhost:9090</code>)<br><br>🎉 ¡Aparece el escritorio remoto del host en la pantalla del alumno!`,
+  fw:[["allow","ACCEPT TCP 192.168.0.15:22 → 172.16.0.20:51022","SSH · Datos cifrados: 8b 02 f7 c4 1e 6a 90 3d …"]],
+  set:{rdp:"on", logical:true}},
+ {ph:3, title:"Los tres tramos de la conexión", hl:["app","cli","srv","host"],
+  text:`Para MSTSC es como si estuviera conectado <b>directamente</b> al host RDP (línea azul punteada). En realidad la conexión tiene tres tramos:${SEGMENTS}`,
+  tip:`El tramo ③ va sin la protección de SSH. En este caso no es grave porque está dentro de la Red B y RDP tiene su propio cifrado, pero conviene saberlo.`, warn:1},
+ {ph:4, title:"Resumen",
+  text:`Un <b>túnel SSH local</b> permite acceder a un servicio remoto a través de un servidor SSH:${CMD}
+  <ul style="margin:10px 0 0;padding-left:20px">
+   <li>El cliente escucha en un <b>puerto local</b> (9090).</li>
+   <li>Lo que llega a ese puerto viaja <b>cifrado</b> por SSH (puerto 22) hasta el servidor.</li>
+   <li>El servidor lo reenvía al <b>host y puerto remotos</b> (192.168.0.10:3389).</li>
+   <li>El cortafuegos solo ve tráfico SSH.</li>
+  </ul>`,
+  tip:`Opciones útiles: <code>-N</code> crea el túnel sin abrir una shell y <code>-f</code> lo deja en segundo plano. También existen <code>-R</code> (túnel <i>remoto</i>, en sentido inverso) y <code>-D</code> (túnel <i>dinámico</i>, un proxy SOCKS).`}
+];
+
+/* ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+let cur = 0, token = 0, playing = false, playTimer = null;
+const speed = () => parseFloat($("speed").value);
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const PATHS = ["pApp","pDirect","pTunnel","pHost"];
+const BOXES = ["app","cli","srv","host","fw"];
+
+$("phases").innerHTML = PHASES.map((p,i)=>`<div class="phase" data-p="${i+1}"><b>${i+1}</b>${p}</div>`).join('');
+
+const RDP = {
+  off:["Conexión a Escritorio remoto", `<div>Sin conexión</div>`, ""],
+  err:["Conexión a Escritorio remoto", `<div><div style="font-size:30px">⛔</div><b>No se puede conectar al equipo remoto</b><br><small>192.168.0.10 · Tiempo de espera agotado</small></div>`, "err"],
+  connecting:["localhost:9090 - Conexión a Escritorio remoto", `<div><div class="spin"></div>Conectando a <b>localhost:9090</b>…</div>`, ""],
+  on:["localhost:9090 - Conexión a Escritorio remoto", `<div class="icons"><div><span>🗑️</span>Papelera</div><div><span>💻</span>Este equipo</div><div><span>📁</span>Documentos</div></div>
+      <div class="task"><span>⊞</span><span>🔍</span><span>📁</span><span style="margin-left:auto">HOST-RDP · 192.168.0.10</span></div>`, "on"]
+};
+
+function render(i, animate=true){
+  cur = i; token++;
+  const step = STEPS[i];
+  $("pktLayer").innerHTML = "";
+
+  // Estado acumulado
+  let st = {}, term = "", fw = [];
+  STEPS.slice(0, i+1).forEach((s, si) => {
+    const isNew = si === i;
+    Object.assign(st, s.set || {});
+    (s.term||[]).forEach(([c,t]) => term += `<span class="${c} ${isNew?"nl":""}">${esc(t)}</span>`);
+    (s.fw||[]).forEach(r => fw.push({r, isNew}));
+  });
+
+  // Esquema
+  $("tube").classList.toggle("open", !!st.tunnel);
+  $("tubeGlow").classList.toggle("open", !!st.tunnel);
+  $("tubeLbl").classList.toggle("on", !!st.tunnel);
+  $("listen").classList.toggle("on", !!st.listen);
+  $("pLogical").classList.toggle("lit", !!st.logical);
+  $("logicalLbl").classList.toggle("on", !!st.logical);
+  const active = new Set((step.pkts||[]).map(p => p[0]));
+  PATHS.forEach(p => $(p).classList.toggle("on", active.has(p)));
+  BOXES.forEach(b => $(b).classList.toggle("hl", (step.hl||[]).includes(b)));
+  $("fw").classList.remove("block","pass");
+
+  // Fases
+  document.querySelectorAll(".phase").forEach(el => {
+    const p = +el.dataset.p;
+    el.className = "phase " + (p < step.ph ? "done" : p === step.ph ? "active" : "");
+  });
+
+  // Explicación
+  const ex = $("explain");
+  ex.classList.remove("fade"); void ex.offsetWidth; ex.classList.add("fade");
+  ex.innerHTML = `<h3>📖 Explicación</h3>
+    <span class="badge">Fase ${step.ph} · ${PHASES[step.ph-1]}</span>
+    <h2>${step.title}</h2>
+    <div class="txt">${step.text}</div>
+    ${step.tip ? `<div class="tip ${step.warn?"warn":""}">💡 ${step.tip}</div>` : ""}`;
+
+  // Paneles
+  $("term").innerHTML = term + '<span class="cursor"></span>';
+  $("term").scrollTop = 1e6;
+  $("fwlog").innerHTML = fw.length ? fw.map(({r,isNew}) =>
+    `<div class="${r[0]} ${isNew?"new":""}">${r[0]==="allow"?"✔":"✖"} ${esc(r[1])}<small>${esc(r[2])}</small></div>`).join('')
+    : `<div class="empty">Sin eventos registrados.</div>`;
+  $("fwlog").scrollTop = 1e6;
+  // La ventana RDP se actualiza al final de la animación si el paso cambia su estado
+  const prevRdp = Object.assign({}, ...STEPS.slice(0, i).map(s => s.set || {})).rdp || "off";
+  showRdp(animate && step.pkts ? prevRdp : (st.rdp || "off"));
+
+  $("counter").textContent = `${i+1} / ${STEPS.length}`;
+  $("bar").style.width = ((i+1)/STEPS.length*100) + "%";
+  $("prev").disabled = i === 0;
+  $("next").disabled = i === STEPS.length-1;
+
+  const tk = token;
+  const done = step.pkts && animate ? runPackets(step.pkts, tk) : Promise.resolve();
+  done.then(() => { if(tk !== token) return; showRdp(st.rdp || "off"); scheduleNext(step); });
+}
+
+function showRdp(k){
+  const [title, html, cls] = RDP[k];
+  const scr = $("rdpScr");
+  if(scr.dataset.k === k) return;
+  scr.dataset.k = k;
+  $("rdpTitle").textContent = title;
+  scr.className = "scr " + cls;
+  scr.innerHTML = html;
+}
+
+function makePkt(label, kind){
+  const g = document.createElementNS(NS,"g");
+  g.setAttribute("class","pkt "+kind);
+  const r = document.createElementNS(NS,"rect"), t = document.createElementNS(NS,"text");
+  t.textContent = label; t.setAttribute("y","5");
+  g.append(r,t); $("pktLayer").appendChild(g);
+  const w = t.getBBox().width + 22;
+  r.setAttribute("x",-w/2); r.setAttribute("y",-14); r.setAttribute("width",w); r.setAttribute("height",28); r.setAttribute("rx",14);
+  g.setAttribute("transform","translate(-100 -100)");
+  return g;
+}
+
+function move(path, rev, g, dur, tk, onMid){
+  return new Promise(res => {
+    const L = path.getTotalLength(), t0 = performance.now();
+    let mid = false;
+    function f(now){
+      if(tk !== token){ g.remove(); return res(false); }
+      const p = Math.min(1, (now - t0) / dur);
+      const e = p < .5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;
+      if(!mid && e > .5 && onMid){ mid = true; onMid(); }
+      const pt = path.getPointAtLength((rev ? 1-e : e) * L);
+      g.setAttribute("transform",`translate(${pt.x} ${pt.y})`);
+      if(p < 1) requestAnimationFrame(f); else res(true);
+    }
+    requestAnimationFrame(f);
+  });
+}
+
+function flashFw(cls){
+  const fw = $("fw");
+  fw.classList.remove("block","pass"); void fw.getBBox(); fw.classList.add(cls);
+}
+function pulse(id){ const b=$(id); b.classList.remove("pulse"); void b.getBBox(); b.classList.add("pulse"); }
+const wait = (ms, tk) => new Promise(r => setTimeout(() => r(tk === token), ms));
+
+async function runPackets(list, tk){
+  for(const [pid, rev, label, kind, target] of list){
+    const path = $(pid), g = makePkt(label, kind);
+    const L = path.getTotalLength();
+    const dur = Math.max(900, L * 5.2) / speed();
+    const ok = await move(path, rev, g, dur, tk, pid === "pTunnel" ? () => flashFw("pass") : null);
+    if(!ok) return;
+    if(target === "block"){
+      g.setAttribute("class","pkt dead");
+      g.querySelector("text").textContent = "✖ bloqueado";
+      flashFw("block");
+      if(!await wait(1100/speed(), tk)) return;
+      g.remove();
+    } else {
+      pulse(target);
+      if(!await wait(180, tk)) return;
+      g.remove();
+    }
+  }
+}
+
+function scheduleNext(step){
+  clearTimeout(playTimer);
+  if(!playing) return;
+  if(cur >= STEPS.length-1){ setPlaying(false); return; }
+  const words = (step.text + (step.tip||"")).replace(/<[^>]+>/g,"").split(/\s+/).length;
+  const tk = token;
+  playTimer = setTimeout(() => { if(tk === token && playing) render(cur+1); }, (2500 + words*140) / speed());
+}
+function setPlaying(v){
+  playing = v;
+  $("play").textContent = v ? "⏸ Pausa" : "⏵ Auto";
+  $("play").classList.toggle("playing", v);
+  clearTimeout(playTimer);
+  if(v){ if(cur >= STEPS.length-1) render(0); else render(cur+1); }
+}
+
+$("next").onclick = () => { if(cur < STEPS.length-1) render(cur+1); };
+$("prev").onclick = () => { if(cur > 0) render(cur-1); };
+$("reset").onclick = () => { setPlaying(false); render(0); };
+$("play").onclick = () => setPlaying(!playing);
+$("speed").oninput = () => $("speedv").textContent = speed() + "x";
+document.addEventListener("keydown", e => {
+  if(e.target.tagName === "INPUT") return;
+  if(e.key === "ArrowRight" || e.key === " "){ e.preventDefault(); $("next").click(); }
+  if(e.key === "ArrowLeft"){ e.preventDefault(); $("prev").click(); }
+});
+
+render(0);
+</script>
+</body>
+</html>
