@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador SSH</title>
+<style>
+:root{
+  --bg:#f6f1ea; --card:#ffffff; --ink:#2b2118; --muted:#7d6f63; --line:#ebe2d8;
+  --green:#3a9d74; --green-d:#2c7a5a; --brown:#7a4a2e; --dim:#ddd3c9; --accent:#e0662b;
+  --plain:#e0901e; --asym:#7c3aed; --sym:#16a34a;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink);
+  background:
+    radial-gradient(1100px 600px at 5% -10%, #e2f2e9 0%, transparent 60%),
+    radial-gradient(900px 500px at 105% 0%, #f8e4d6 0%, transparent 60%),
+    var(--bg);
+  min-height:100vh;
+}
+header{max-width:1440px;margin:0 auto;padding:22px 16px 6px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 24px;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--green),var(--green-d));display:grid;place-items:center;color:#fff;font:700 18px ui-monospace,Consolas,monospace;box-shadow:0 6px 18px rgba(58,157,116,.35)}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}
+.sub{margin:2px 0 0;color:var(--muted);font-size:14px}
+.phases{display:flex;flex-wrap:wrap;gap:6px}
+.phase{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:13px;color:var(--muted);transition:.3s}
+.phase b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--dim);color:#fff;font-size:11px}
+.phase.done{color:var(--brown)} .phase.done b{background:var(--brown)}
+.phase.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(224,102,43,.35)} .phase.active b{background:#fff;color:var(--accent)}
+
+.layout{max-width:1440px;margin:0 auto;padding:12px 16px 28px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 28px rgba(70,45,20,.07);padding:16px}
+.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:flex;align-items:center;gap:8px}
+
+/* ---------- Esquema SVG ---------- */
+#scheme{width:100%;height:auto;display:block}
+.arrow{fill:none;stroke-width:4;stroke-linejoin:round;transition:stroke .4s,stroke-width .4s,opacity .4s}
+.arrow.dim{stroke:var(--dim)}
+.arrow.done{stroke:var(--brown)}
+.arrow.active{stroke:var(--accent);stroke-width:5;filter:url(#glow);stroke-dasharray:14 8;animation:dash 1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-22}}
+.lbl text{font-size:14.5px;transition:fill .4s}
+.lbl.dim text{fill:#bcb0a5} .lbl.done text{fill:var(--ink)} .lbl.active text{fill:var(--accent);font-weight:700}
+.lbl5 tspan.cur{fill:var(--accent);font-weight:800}
+.box rect{fill:url(#gbox);stroke:#2c7a5a;stroke-width:2;transition:filter .3s}
+.box text{fill:#fff;text-anchor:middle}
+.box .name{font-size:23px;font-weight:700}
+.box .ip{font-size:12px;opacity:.85;font-family:ui-monospace,Consolas,monospace}
+.box.pulse{animation:pulse .7s ease}
+.box{transform-box:fill-box;transform-origin:center}
+@keyframes pulse{0%{transform:scale(1)}40%{transform:scale(1.07)}100%{transform:scale(1)}}
+.box.secure rect{stroke:#16a34a;stroke-width:4;filter:url(#glowG)}
+.box.insecure rect{stroke:#dc2626;stroke-width:4;filter:url(#glowR)}
+.arrow.hide,.lbl.hide{display:none}
+.pkt.danger rect{fill:#dc2626}
+
+/* ---------- Selector de protocolo ---------- */
+.mode{display:flex;background:#fff;border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px;box-shadow:0 4px 14px rgba(70,45,20,.06)}
+.mode button{border:none;padding:8px 16px;border-radius:10px;background:transparent;color:var(--muted)}
+.mode button:hover{transform:none;background:#faf6f1}
+.mode button.on[data-m="ssh"]{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff}
+.mode button.on[data-m="telnet"]{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff}
+body.telnet .logo{background:linear-gradient(135deg,#ef4444,#b91c1c);box-shadow:0 6px 18px rgba(220,38,38,.35)}
+.hdr-right{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+table.cmp{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
+table.cmp th,table.cmp td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left}
+table.cmp th{font-size:12px;text-transform:uppercase;color:var(--muted)}
+table.cmp td.bad{color:#b91c1c;font-weight:600} table.cmp td.good{color:#166534;font-weight:600}
+pre.stream{margin:12px 0 0;padding:12px;border-radius:12px;background:#1b1d23;color:#cbd5e1;font:12.5px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap}
+pre.stream .c{color:#fca5a5} pre.stream .s{color:#93c5fd} pre.stream .pw{background:#dc2626;color:#fff;padding:0 3px;border-radius:4px;font-weight:700}
+#lockBadge{opacity:0;transition:opacity .6s}
+#lockBadge.on{opacity:1}
+.pkt rect{stroke:#fff;stroke-width:2;filter:drop-shadow(0 3px 5px rgba(0,0,0,.25))}
+.pkt text{fill:#fff;font:700 13px system-ui,Segoe UI,sans-serif;text-anchor:middle}
+.pkt.plain rect{fill:var(--plain)} .pkt.asym rect{fill:var(--asym)} .pkt.sym rect{fill:var(--sym)} .pkt.check rect{fill:#0ea5e9}
+
+/* ---------- Controles ---------- */
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
+button{font:600 14px system-ui,Segoe UI,sans-serif;border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 14px;border-radius:11px;cursor:pointer;transition:.15s}
+button:hover{border-color:var(--brown);transform:translateY(-1px)}
+button.primary{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;border:none;box-shadow:0 4px 14px rgba(58,157,116,.35)}
+button.playing{background:var(--accent);color:#fff;border-color:var(--accent)}
+button:disabled{opacity:.4;cursor:default;transform:none}
+.speed{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-left:auto}
+.counter{font:600 13px ui-monospace,Consolas,monospace;color:var(--muted)}
+.progress{height:5px;border-radius:5px;background:var(--line);margin-top:10px;overflow:hidden}
+.progress div{height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--accent));transition:width .4s}
+
+/* ---------- Explicación ---------- */
+.explain{display:flex;flex-direction:column}
+.badge{align-self:flex-start;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:#fdebe1;color:var(--accent);margin-bottom:8px}
+.explain h2{margin:0 0 10px;font-size:22px;letter-spacing:-.01em}
+.explain .txt{font-size:15.5px;line-height:1.6}
+.explain code,.tip code{background:#f3ece4;padding:1px 6px;border-radius:6px;font-size:.9em;font-family:ui-monospace,Consolas,monospace}
+.tip{margin-top:14px;padding:11px 14px;border-radius:12px;background:#eef7f2;border-left:4px solid var(--green);font-size:14px;line-height:1.5}
+.tip.warn{background:#fff4e5;border-left-color:var(--plain)}
+.fade{animation:fadeUp .45s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+table.alg{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+table.alg th,table.alg td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+table.alg th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase}
+.chosen{background:#e5f5ec;color:#166534;font-weight:700;border-radius:6px;padding:1px 6px;font-family:ui-monospace,Consolas,monospace}
+.rej{color:#a8998c;text-decoration:line-through;font-family:ui-monospace,Consolas,monospace}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:12px}
+.flow .it{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 10px;border-radius:12px;background:#faf6f1;border:1px solid var(--line);font-size:12px;text-align:center;min-width:78px}
+.flow .it span{font-size:24px}
+.flow .it.new{border-color:var(--accent);background:#fff3ec;animation:fadeUp .45s}
+.flow .ar{color:var(--muted);font-weight:700}
+
+/* ---------- Fila inferior ---------- */
+.bottom{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr);gap:16px}
+.keys{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.keys>div{min-width:0}
+.chip>span:last-child{min-width:0;overflow-wrap:anywhere}
+.chip code{font-size:11.5px}
+.keys h4{margin:0 0 8px;font-size:14px}
+.chip{display:flex;gap:6px;align-items:flex-start;padding:7px 9px;border-radius:10px;background:#faf6f1;border:1px solid var(--line);font-size:12.5px;margin-bottom:6px;line-height:1.35}
+.chip.new{border-color:var(--accent);background:#fff3ec;animation:fadeUp .45s}
+.chip.secret{border-left:4px solid #dc2626}
+.term{background:#14161c;border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 1px #2a2e38}
+.term .bar{display:flex;gap:6px;align-items:center;padding:8px 12px;background:#232731}
+.term .bar i{width:11px;height:11px;border-radius:50%;display:block}
+.term .bar span{margin-left:8px;color:#9aa3b2;font-size:12px}
+.term pre{margin:0;padding:12px 14px;height:250px;overflow:auto;color:#d6dde8;font:13px/1.55 ui-monospace,Consolas,"Courier New",monospace;white-space:pre-wrap;word-break:break-word}
+.term .p{color:#7ee787} .term .w{color:#f0b429} .term .ok{color:#56d4dd} .term .in{color:#fff;font-weight:700} .term .dimt{color:#7b8494}
+.term .nl{animation:fadeUp .4s}
+.cursor{display:inline-block;width:8px;height:15px;background:#7ee787;vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.sniff{height:280px;overflow:auto;font:12px/1.4 ui-monospace,Consolas,monospace;border-radius:12px;border:1px solid var(--line)}
+.sniff table{width:100%;border-collapse:collapse;table-layout:fixed}
+.sniff th:nth-child(1){width:30px} .sniff th:nth-child(2),.sniff th:nth-child(3){width:96px} .sniff th:nth-child(4){width:76px}
+.sniff td{overflow-wrap:anywhere}
+.sniff th{position:sticky;top:0;z-index:1;background:#2b2118;color:#f6f1ea;text-align:left;padding:6px 8px;font-weight:600}
+.sniff td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.sniff tr.plain td{background:#fff8ec} .sniff tr.asym td{background:#f4efff} .sniff tr.sym td{background:#eefaf2}
+.sniff tr.new td{animation:fadeUp .45s}
+.sniff tr.danger td{background:#fee2e2;color:#991b1b;font-weight:700}
+.hex{color:#16a34a;font-size:11px;opacity:.9} tr.asym .hex{color:#7c3aed}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+.empty{color:var(--muted);font-style:italic;padding:14px;text-align:center}
+
+@media (max-width:1100px){
+  .layout{grid-template-columns:1fr}
+  .bottom{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">&gt;_</div>
+    <div>
+      <h1 id="h1">Simulador del protocolo SSH</h1>
+      <p class="sub" id="sub">Cómo se establece una conexión segura entre cliente y servidor, paso a paso</p>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="mode" id="mode">
+      <button data-m="ssh" class="on">🔒 SSH (puerto 22)</button>
+      <button data-m="telnet">⚠️ Telnet (puerto 23)</button>
+    </div>
+    <div class="phases" id="phases"></div>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- Esquema -->
+  <section class="card">
+    <h3>📡 Esquema de la conexión</h3>
+    <svg id="scheme" viewBox="-10 0 910 470" role="img" aria-label="Esquema del protocolo SSH">
+      <defs>
+        <linearGradient id="gbox" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#44ad83"/><stop offset="1" stop-color="#2f8a64"/>
+        </linearGradient>
+        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#e0662b" flood-opacity=".55"/>
+        </filter>
+        <filter id="glowG" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#16a34a" flood-opacity=".7"/>
+        </filter>
+        <filter id="glowR" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#dc2626" flood-opacity=".7"/>
+        </filter>
+        <marker id="m-dim" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#ddd3c9"/></marker>
+        <marker id="m-done" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7a4a2e"/></marker>
+        <marker id="m-active" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#e0662b"/></marker>
+      </defs>
+
+      <!-- Flechas -->
+      <path id="a1" class="arrow dim" d="M165 150 V52 H720 V146"/>
+      <path id="a2" class="arrow dim" data-both="1" d="M276 178 H634"/>
+      <path id="a3" class="arrow dim" d="M638 226 H276"/>
+      <path id="a4" class="arrow dim" d="M110 234 C 5 290, -8 120, 104 166"/>
+      <path id="a5" class="arrow dim" d="M205 252 V350 H705 V256"/>
+      <path id="a6" class="arrow dim" data-both="1" d="M150 256 V412 H760 V256"/>
+
+      <!-- Etiquetas -->
+      <g id="l1" class="lbl dim"><text x="445" y="40" text-anchor="middle">1. Conexión TCP sobre el puerto 22 del servidor</text></g>
+      <g id="l2" class="lbl dim">
+        <text x="455" y="130" text-anchor="middle">2. Acuerdo sobre versión de SSH que van a utilizar</text>
+        <text x="455" y="152" text-anchor="middle">y algoritmo de cifrado (simétrico)</text>
+      </g>
+      <g id="l3" class="lbl dim"><text x="455" y="215" text-anchor="middle">3. Envío de clave pública</text></g>
+      <g id="l4" class="lbl dim">
+        <text x="48" y="308" text-anchor="middle">4. Verificación de</text>
+        <text x="48" y="326" text-anchor="middle">clave pública</text>
+      </g>
+      <g id="l5" class="lbl lbl5 dim">
+        <text x="285" y="272">5. Generación de:</text>
+        <text x="300" y="290"><tspan id="s5i">i. Clave de sesión aleatoria</tspan></text>
+        <text x="300" y="307"><tspan id="s5ii">ii. Mensaje con clave y algoritmo seleccionado</tspan></text>
+        <text x="300" y="324"><tspan id="s5iii">iii. Paquete encriptado con clave pública del servidor</tspan></text>
+        <text x="300" y="341"><tspan id="s5iv">iv. Envío al servidor</tspan></text>
+      </g>
+      <g id="l6" class="lbl dim">
+        <text x="455" y="436" text-anchor="middle">6. Uso de algoritmo de cifrado simétrico</text>
+        <text x="455" y="454" text-anchor="middle">seleccionado y clave de sesión aleatoria</text>
+      </g>
+      <!-- Etiquetas del modo Telnet -->
+      <g id="t1" class="lbl hide"><text x="445" y="40" text-anchor="middle">1. Conexión TCP sobre el puerto 23 del servidor</text></g>
+      <g id="t2" class="lbl hide">
+        <text x="455" y="436" text-anchor="middle">2. Todo viaja en claro: usuario, contraseña,</text>
+        <text x="455" y="454" text-anchor="middle">comandos y resultados (sin ningún cifrado)</text>
+      </g>
+
+      <!-- Candado del túnel -->
+      <g id="lockBadge" transform="translate(455 381)">
+        <rect id="lockRect" x="-118" y="-15" width="236" height="30" rx="15" fill="#16a34a"/>
+        <text id="lockText" x="0" y="5" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">🔒 Canal cifrado · aes256-ctr</text>
+      </g>
+
+      <!-- Equipos -->
+      <g id="cli" class="box">
+        <rect x="110" y="150" width="166" height="106" rx="6"/>
+        <text class="name" x="193" y="199">Cliente</text>
+        <text class="ip" x="193" y="224">192.168.1.10</text>
+      </g>
+      <g id="srv" class="box">
+        <rect x="634" y="150" width="166" height="106" rx="6"/>
+        <text class="name" x="717" y="199">Servidor</text>
+        <text class="ip" id="srvIp" x="717" y="224">192.168.1.20:22</text>
+      </g>
+
+      <g id="pktLayer"></g>
+    </svg>
+
+    <div class="controls">
+      <button id="reset" title="Reiniciar">⟲ Reiniciar</button>
+      <button id="prev" title="Anterior (←)">◀ Anterior</button>
+      <button id="next" class="primary" title="Siguiente (→ o espacio)">Siguiente ▶</button>
+      <button id="play" title="Reproducción automática">⏵ Auto</button>
+      <span class="counter" id="counter"></span>
+      <label class="speed">Velocidad
+        <input type="range" id="speed" min="0.5" max="2" step="0.25" value="1">
+        <span id="speedv">1x</span>
+      </label>
+    </div>
+    <div class="progress"><div id="bar"></div></div>
+  </section>
+
+  <!-- Explicación -->
+  <section class="card explain" id="explain"></section>
+
+  <!-- Fila inferior -->
+  <div class="bottom">
+    <section class="card">
+      <h3>🔑 ¿Qué conoce cada uno?</h3>
+      <div class="keys">
+        <div><h4>💻 Cliente</h4><div id="kc"></div></div>
+        <div><h4>🖥️ Servidor</h4><div id="ks"></div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>⌨️ Terminal del cliente</h3>
+      <div class="term">
+        <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span>alumno@cliente: ~</span></div>
+        <pre id="term"></pre>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>🕵️ Lo que ve un atacante (Wireshark)</h3>
+      <div class="sniff" id="sniff"></div>
+      <div class="legend">
+        <span style="--c:#e0901e">En claro (legible)</span>
+        <span style="--c:#7c3aed">Cifrado asimétrico</span>
+        <span style="--c:#16a34a">Cifrado simétrico</span>
+        <span style="--c:#dc2626">Dato sensible en claro</span>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const C = "192.168.1.10", S = "192.168.1.20";
+const SSH_PHASES = ["Conexión TCP","Versión y algoritmo","Clave pública","Verificación","Clave de sesión","Cifrado simétrico"];
+
+/* Visual de la fase 5: cómo viaja la clave de sesión */
+const FLOW = [
+  {st:1, ic:"🎲", t:"Generador<br>aleatorio"},
+  {st:1, ic:"🔑", t:"Clave de sesión<br><code>7f3a…e21b</code>"},
+  {st:2, ic:"✉️", t:"Mensaje:<br>🔑 + aes256-ctr"},
+  {st:3, ic:"📜", t:"+ Clave pública<br>del servidor"},
+  {st:3, ic:"📦", t:"Paquete<br>cifrado 🔒"},
+  {st:4, ic:"🌐", t:"Viaja por<br>la red"},
+  {st:5, ic:"🗝️", t:"Clave privada<br>del servidor"},
+  {st:5, ic:"🔑", t:"Clave de sesión<br>recuperada"}
+];
+function flowHTML(st){
+  const items = FLOW.filter(f => f.st <= st);
+  return '<div class="flow">' + items.map((f,i) =>
+    (i ? '<span class="ar">→</span>' : '') +
+    `<div class="it ${f.st===st?'new':''}"><span>${f.ic}</span>${f.t}</div>`).join('') + '</div>';
+}
+
+const ALG_OFFER = `
+<table class="alg">
+<tr><th>Función</th><th>Propuesta del cliente (por preferencia)</th></tr>
+<tr><td>Cifrado simétrico</td><td><code>aes256-ctr</code>, <code>aes128-ctr</code>, <code>chacha20-poly1305</code></td></tr>
+<tr><td>Integridad (MAC)</td><td><code>hmac-sha2-256</code>, <code>hmac-sha2-512</code></td></tr>
+<tr><td>Clave del servidor</td><td><code>ssh-rsa</code>, <code>ssh-ed25519</code></td></tr>
+<tr><td>Compresión</td><td><code>none</code>, <code>zlib</code></td></tr>
+</table>`;
+const ALG_CHOSEN = `
+<table class="alg">
+<tr><th>Función</th><th>Resultado</th></tr>
+<tr><td>Cifrado simétrico</td><td><span class="chosen">aes256-ctr</span> <span class="rej">aes128-ctr</span> <span class="rej">chacha20</span></td></tr>
+<tr><td>Integridad (MAC)</td><td><span class="chosen">hmac-sha2-256</span> <span class="rej">hmac-sha2-512</span></td></tr>
+<tr><td>Clave del servidor</td><td><span class="chosen">ssh-rsa</span> <span class="rej">ssh-ed25519</span></td></tr>
+<tr><td>Compresión</td><td><span class="chosen">none</span> <span class="rej">zlib</span></td></tr>
+</table>`;
+
+const SUMMARY = `
+<div class="flow" style="flex-direction:column;align-items:stretch">
+${SSH_PHASES.map((p,i)=>`<div class="it" style="flex-direction:row;gap:10px;text-align:left;font-size:13.5px"><b style="color:var(--accent);font-size:16px">${i+1}</b>${[
+ "TCP al puerto 22: se abre el canal de comunicación.",
+ "Se pactan la versión (SSH-2) y los algoritmos de cifrado.",
+ "El servidor envía su clave pública.",
+ "El cliente la verifica en <code>known_hosts</code> (evita suplantaciones).",
+ "El cliente genera la clave de sesión y la envía cifrada con la clave pública del servidor.",
+ "Todo el tráfico se cifra con el algoritmo simétrico y la clave de sesión."][i]}</div>`).join('')}
+</div>`;
+
+/* term: [clase, texto]   sniff: [origen, destino, protocolo, info, tipo, longitud]
+   kc/ks: {id:[icono, texto, secreto?]} (un id posterior sustituye al anterior) */
+const SSH_STEPS = [
+ {ph:0, title:"¿Qué es SSH?",
+  text:`<b>SSH</b> (<i>Secure Shell</i>) es un protocolo para conectarse a un equipo remoto y administrarlo de forma <b>segura</b>. Sustituye a Telnet o rlogin, que enviaban toda la información <b>en claro</b>, contraseñas incluidas.<br><br>El alumno quiere conectarse al servidor, así que escribe en su terminal:<br><code>ssh alumno@192.168.1.20</code>`,
+  tip:`Pulsa <b>Siguiente</b> (o la tecla →) para avanzar. Abajo a la derecha verás lo que capturaría un atacante que espía la red con Wireshark. Con el botón <b>⚠️ Telnet</b> de arriba puedes comparar con una conexión sin cifrar.`,
+  term:[["p","alumno@cliente:~$ "],["in","ssh alumno@192.168.1.20\n"]],
+  kc:{kh:["📂","~/.ssh/known_hosts: vacío"]},
+  ks:{priv:["🗝️","Clave privada del servidor<br><code>/etc/ssh/ssh_host_rsa_key</code>",1], pub:["📜","Clave pública del servidor<br><code>ssh_host_rsa_key.pub</code>"]}},
+
+ {ph:1, arrow:"a1", dir:"fwd", pkt:["SYN","plain"], title:"Petición de conexión (SYN)",
+  text:`SSH funciona sobre <b>TCP</b>, así que primero se abre una conexión TCP normal con el <i>three-way handshake</i>.<br><br>El cliente envía un segmento <b>SYN</b> desde un puerto aleatorio (50514) al <b>puerto 22</b> del servidor, donde escucha el servicio <code>sshd</code>.`,
+  sniff:[[C,S,"TCP","50514 → 22 [SYN] Seq=0","plain"]]},
+ {ph:1, arrow:"a1", dir:"rev", pkt:["SYN-ACK","plain"], title:"El servidor acepta (SYN-ACK)",
+  text:`El servidor tiene el puerto 22 abierto y responde con <b>SYN-ACK</b>: acepta la conexión y confirma la petición del cliente.`,
+  sniff:[[S,C,"TCP","22 → 50514 [SYN, ACK] Seq=0 Ack=1","plain"]]},
+ {ph:1, arrow:"a1", dir:"fwd", pkt:["ACK","plain"], title:"Conexión TCP establecida (ACK)",
+  text:`El cliente confirma con <b>ACK</b>. Ya existe un canal TCP fiable entre los dos equipos…<br><br>…pero <b>todavía no hay nada cifrado</b>. Todo lo que viaje ahora se puede leer.`,
+  tip:`El puerto se configura en <code>/etc/ssh/sshd_config</code> (directiva <code>Port</code>). Si se cambia, el cliente debe indicarlo: <code>ssh -p 2222 alumno@servidor</code>.`,
+  sniff:[[C,S,"TCP","50514 → 22 [ACK] Seq=1 Ack=1","plain"]]},
+
+ {ph:2, arrow:"a2", dir:"both", pkt:["SSH-2.0","plain"], title:"Acuerdo de versión",
+  text:`Cada extremo envía una línea de texto con la <b>versión del protocolo</b> y del software que usa:<br><br>• Cliente: <code>SSH-2.0-OpenSSH_9.6</code><br>• Servidor: <code>SSH-2.0-OpenSSH_9.2p1 Debian</code><br><br>Ambos hablan <b>SSH-2</b>, así que continúan. La versión 1 tiene fallos graves y está obsoleta.`,
+  tip:`Esta línea viaja <b>en claro</b>: un atacante puede saber qué versión de SSH usa el servidor. Por eso conviene tenerlo siempre actualizado.`, warn:1,
+  sniff:[[C,S,"SSHv2","Client: SSH-2.0-OpenSSH_9.6","plain"],[S,C,"SSHv2","Server: SSH-2.0-OpenSSH_9.2p1 Debian","plain"]]},
+ {ph:2, arrow:"a2", dir:"fwd", pkt:["Algoritmos","plain"], title:"El cliente propone algoritmos",
+  text:`El cliente envía la lista de algoritmos que soporta, <b>ordenados por preferencia</b>, para cada función:${ALG_OFFER}`,
+  sniff:[[C,S,"SSHv2","Client: Key Exchange Init (lista de algoritmos)","plain"]]},
+ {ph:2, arrow:"a2", dir:"rev", pkt:["Algoritmos","plain"], title:"Se elige el algoritmo de cifrado",
+  text:`El servidor envía su propia lista. Para cada función se elige <b>el primero de la lista del cliente que también soporte el servidor</b>:${ALG_CHOSEN}`,
+  tip:`El algoritmo <b>simétrico</b> (aquí AES de 256 bits) es el que cifrará toda la sesión. Solo le falta una cosa: una <b>clave</b> que conozcan los dos y nadie más.`,
+  sniff:[[S,C,"SSHv2","Server: Key Exchange Init (lista de algoritmos)","plain"]],
+  kc:{alg:["⚙️","Algoritmo pactado: <code>aes256-ctr</code>"]}, ks:{alg:["⚙️","Algoritmo pactado: <code>aes256-ctr</code>"]}},
+
+ {ph:3, arrow:"a3", dir:"fwd", pkt:["📜 Clave pública","plain"], title:"El servidor envía su clave pública",
+  text:`El servidor tiene un <b>par de claves asimétricas</b>, generado al instalar SSH:<br><br>• 📜 <b>Clave pública</b>: se puede repartir a cualquiera.<br>• 🗝️ <b>Clave privada</b>: nunca sale del servidor.<br><br>Lo que se cifra con la clave pública <b>solo se puede descifrar con la privada</b>. El servidor envía ahora su clave pública al cliente.`,
+  tip:`No importa que el atacante vea la clave pública: es pública. Sin la clave privada no puede descifrar nada.`,
+  sniff:[[S,C,"SSHv2","Server: Host Key (ssh-rsa AAAAB3NzaC1yc2E…)","plain"]],
+  kc:{pub:["📜","Clave pública del servidor (recibida)"]}},
+
+ {ph:4, arrow:"a4", dir:"fwd", pkt:["🔍","check"], title:"¿Es el servidor auténtico?",
+  text:`Antes de fiarse, el cliente comprueba que la clave es del servidor real y no de un <b>impostor</b> que se haya colado en medio (ataque <i>man-in-the-middle</i>).<br><br>Calcula la <b>huella</b> (<i>fingerprint</i>) de la clave y la busca en <code>~/.ssh/known_hosts</code>. Es la primera conexión, así que no la encuentra y <b>pregunta al usuario</b>.`,
+  tip:`Lo correcto es comparar la huella con la que te dé el administrador por otra vía. El administrador la consulta con <code>ssh-keygen -lf /etc/ssh/ssh_host_rsa_key.pub</code>.`,
+  term:[["","The authenticity of host '192.168.1.20 (192.168.1.20)' can't be established.\n"],["","RSA key fingerprint is SHA256:4hN9qV7cZ1bKxT0sWmE2fYjL8uA3dRpG6iO5nHkQwXs.\n"],["w","Are you sure you want to continue connecting (yes/no/[fingerprint])? "]]},
+ {ph:4, arrow:"a4", dir:"fwd", pkt:["✔","check"], title:"Clave aceptada y guardada",
+  text:`El usuario responde <b>yes</b>. La clave pública del servidor se guarda en <code>known_hosts</code>.<br><br>En las próximas conexiones ya no preguntará: comprobará automáticamente que la clave recibida coincide con la guardada.`,
+  tip:`Si algún día la clave no coincide, SSH mostrará <code>WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!</code> y cortará la conexión: puede que alguien esté suplantando al servidor.`, warn:1,
+  term:[["in","yes\n"],["dimt","Warning: Permanently added '192.168.1.20' (RSA) to the list of known hosts.\n"]],
+  kc:{kh:["📂","~/.ssh/known_hosts: 192.168.1.20 ✔"]}},
+
+ {ph:5, sub:"i", arrow:"a5", flow:1, title:"i. Clave de sesión aleatoria",
+  text:`Ahora hay que conseguir que los dos tengan la <b>misma clave simétrica</b> sin que nadie más la conozca.<br><br>El cliente genera al azar una <b>clave de sesión</b>. Solo sirve para esta conexión: en la siguiente se generará otra distinta.`,
+  kc:{sk:["🔑","Clave de sesión <code>7f3a…e21b</code>",1]}},
+ {ph:5, sub:"ii", arrow:"a5", flow:2, title:"ii. Mensaje con clave y algoritmo",
+  text:`El cliente prepara un <b>mensaje</b> con la clave de sesión y el algoritmo simétrico acordado (<code>aes256-ctr</code>).<br><br>Si lo enviara así, el atacante lo leería y podría descifrar toda la sesión. Hay que protegerlo.`},
+ {ph:5, sub:"iii", arrow:"a5", flow:3, title:"iii. Paquete cifrado con la clave pública",
+  text:`El cliente <b>cifra el mensaje con la clave pública del servidor</b> (la que recibió en el paso 3 y verificó en el 4).<br><br>Resultado: un paquete que <b>solo puede abrir quien tenga la clave privada</b>, es decir, el servidor auténtico. ¡Ni siquiera el propio cliente puede descifrarlo!`},
+ {ph:5, sub:"iv", arrow:"a5", dir:"fwd", pkt:["📦🔒 Clave de sesión","asym"], flow:4, title:"iv. Envío al servidor",
+  text:`El paquete viaja hasta el servidor. El atacante lo captura, pero <b>solo ve bytes sin sentido</b>: no tiene la clave privada del servidor.`,
+  sniff:[[C,S,"SSHv2","Encrypted packet (len=268)","asym"]]},
+ {ph:5, sub:"iv", arrow:"a5", flow:5, title:"El servidor abre el paquete",
+  text:`El servidor usa su <b>clave privada</b> para descifrar el paquete y obtiene la clave de sesión.<br><br>✅ <b>Ya los dos tienen la misma clave de sesión</b>, y nunca ha viajado en claro por la red.`,
+  tip:`Este es el esquema clásico con RSA. Las versiones actuales de SSH-2 acuerdan la clave de sesión con <b>Diffie-Hellman</b>, de forma que la clave ni siquiera viaja cifrada: cada extremo la calcula por su cuenta. La idea es la misma: <b>acabar con una clave simétrica compartida</b>.`,
+  ks:{sk:["🔑","Clave de sesión <code>7f3a…e21b</code>",1]}},
+
+ {ph:6, arrow:"a6", dir:"rev", pkt:["🔒 OK","sym"], secure:1, title:"Canal cifrado establecido",
+  text:`A partir de ahora, <b>todo</b> lo que se envía se cifra con el <b>algoritmo simétrico</b> acordado (aes256-ctr) y la <b>clave de sesión</b>.<br><br>¿Por qué no seguir con la clave pública? Porque el cifrado asimétrico es <b>muy lento</b>. Se usa solo para intercambiar la clave; después se pasa al simétrico, que es mucho más rápido.`,
+  sniff:[[S,C,"SSHv2","Encrypted packet (len=52)","sym"]]},
+ {ph:6, arrow:"a6", dir:"fwd", pkt:["🔒 Contraseña","sym"], secure:1, title:"Autenticación del usuario",
+  text:`Hasta ahora se ha comprobado el <b>servidor</b>. Ahora tiene que identificarse el <b>usuario</b>.<br><br>El alumno escribe su contraseña (en pantalla no aparece nada). La contraseña viaja por la red, pero <b>dentro del canal cifrado</b>: el atacante no puede leerla.`,
+  tip:`Con Telnet, el atacante vería la contraseña letra a letra. Una opción aún más segura es autenticarse con <b>clave pública del usuario</b> (<code>ssh-keygen</code> + <code>ssh-copy-id</code>), sin enviar ninguna contraseña.`,
+  term:[["","alumno@192.168.1.20's password: \n"]],
+  sniff:[[C,S,"SSHv2","Encrypted packet (len=84)","sym"]]},
+ {ph:6, arrow:"a6", dir:"rev", pkt:["🔒 Bienvenido","sym"], secure:1, title:"Sesión iniciada",
+  text:`El servidor comprueba la contraseña y abre una <b>shell</b> para el usuario. En la terminal aparece el mensaje de bienvenida y el prompt del servidor.<br><br>Fíjate en que el prompt ahora dice <code>alumno@servidor</code>: los comandos se ejecutan en el equipo remoto.`,
+  term:[["dimt","Linux servidor 6.1.0-18-amd64 #1 SMP Debian x86_64\n"],["dimt","Last login: Mon Sep 28 09:12:44 2026 from 192.168.1.10\n"],["p","alumno@servidor:~$ "]],
+  sniff:[[S,C,"SSHv2","Encrypted packet (len=412)","sym"]]},
+ {ph:6, arrow:"a6", dir:"fwd", pkt:["🔒 ls -l","sym"], secure:1, title:"Enviando un comando",
+  text:`El alumno ejecuta <code>ls -l</code>. Cada tecla y cada comando viajan <b>cifrados</b> por el canal seguro.`,
+  term:[["in","ls -l\n"]],
+  sniff:[[C,S,"SSHv2","Encrypted packet (len=36)","sym"]]},
+ {ph:6, arrow:"a6", dir:"rev", pkt:["🔒 Resultado","sym"], secure:1, title:"Respuesta del servidor",
+  text:`El servidor ejecuta el comando y devuelve el resultado, también cifrado. El cliente lo descifra con la clave de sesión y lo muestra en la terminal.<br><br>Para el usuario es como estar sentado delante del servidor. Para el atacante, solo hay ruido.`,
+  term:[["","total 8\n-rw-r--r-- 1 alumno alumno  220 sep 20 10:02 apuntes.txt\ndrwxr-xr-x 2 alumno alumno 4096 sep 25 12:40 practicas\n"],["p","alumno@servidor:~$ "]],
+  sniff:[[S,C,"SSHv2","Encrypted packet (len=180)","sym"]]},
+ {ph:6, arrow:"a6", dir:"both", pkt:["🔒 exit","sym"], secure:1, final:1, title:"Resumen",
+  text:`El alumno escribe <code>exit</code> y la sesión se cierra. La clave de sesión se descarta. Repaso de lo que ha pasado:${SUMMARY}`,
+  term:[["in","exit\n"],["dimt","logout\nConnection to 192.168.1.20 closed.\n"],["p","alumno@cliente:~$ "]],
+  sniff:[[C,S,"SSHv2","Encrypted packet (len=36)","sym"],[S,C,"TCP","22 → 50514 [FIN, ACK]","plain"]]}
+];
+
+/* ======================= MODO TELNET ======================= */
+const TELNET_PHASES = ["Conexión TCP","Comunicación en claro"];
+const USER = "alumno", PASS = "Secreto1";
+const keyRows = (txt, kind) => [...txt].map(ch => [C,S,"TELNET",`Data: ${ch}`,kind]);
+
+const STREAM = `<pre class="stream"><span class="s">Debian GNU/Linux 12
+servidor login: </span><span class="c">alumno</span><span class="s">
+Password: </span><span class="pw">Secreto1</span><span class="s">
+Linux servidor 6.1.0-18-amd64 #1 SMP Debian x86_64
+alumno@servidor:~$ </span><span class="c">ls -l</span><span class="s">
+total 8
+-rw-r--r-- 1 alumno alumno  220 sep 20 10:02 apuntes.txt
+drwxr-xr-x 2 alumno alumno 4096 sep 25 12:40 practicas
+alumno@servidor:~$ </span><span class="c">exit</span></pre>`;
+
+const COMPARE = `
+<table class="cmp">
+<tr><th></th><th>Telnet</th><th>SSH</th></tr>
+<tr><td>Puerto</td><td>23</td><td>22</td></tr>
+<tr><td>Cifrado</td><td class="bad">❌ Ninguno</td><td class="good">✅ Simétrico (AES…)</td></tr>
+<tr><td>Contraseña</td><td class="bad">Viaja en claro</td><td class="good">Viaja cifrada</td></tr>
+<tr><td>Autenticación del servidor</td><td class="bad">❌ No existe</td><td class="good">✅ Clave pública + known_hosts</td></tr>
+<tr><td>Integridad de los datos</td><td class="bad">❌ Se pueden modificar</td><td class="good">✅ MAC (hmac-sha2)</td></tr>
+<tr><td>Uso recomendado</td><td class="bad">Nunca en redes reales</td><td class="good">Administración remota</td></tr>
+</table>`;
+
+const TELNET_STEPS = [
+ {ph:0, title:"¿Qué es Telnet?",
+  text:`<b>Telnet</b> es un protocolo de 1969 (RFC 854) para abrir una terminal en un equipo remoto. Fue el antecesor de SSH y durante años fue la forma habitual de administrar servidores.<br><br>Su gran problema es que <b>no cifra nada</b>: todo lo que se escribe y todo lo que se recibe viaja por la red <b>tal cual</b>.<br><br>El alumno se conecta con:<br><code>telnet 192.168.1.20</code>`,
+  tip:`Fíjate en el panel del atacante: en esta simulación <b>todo</b> aparecerá en naranja (legible) o en rojo (datos sensibles).`, warn:1,
+  term:[["p","alumno@cliente:~$ "],["in","telnet 192.168.1.20\n"],["dimt","Trying 192.168.1.20...\n"]],
+  kc:{none:["❌","Sin claves: Telnet no usa ningún cifrado"]}, ks:{none:["❌","Sin claves: Telnet no usa ningún cifrado"]}},
+
+ {ph:1, arrow:"a1", dir:"fwd", pkt:["SYN","plain"], title:"Petición de conexión (SYN)",
+  text:`Igual que SSH, Telnet funciona sobre <b>TCP</b>. El cliente envía un <b>SYN</b> desde un puerto aleatorio (50622) al <b>puerto 23</b> del servidor, donde escucha el servicio <code>telnetd</code>.`,
+  sniff:[[C,S,"TCP","50622 → 23 [SYN] Seq=0","plain"]]},
+ {ph:1, arrow:"a1", dir:"rev", pkt:["SYN-ACK","plain"], title:"El servidor acepta (SYN-ACK)",
+  text:`El servidor tiene el puerto 23 abierto y responde con <b>SYN-ACK</b>.`,
+  sniff:[[S,C,"TCP","23 → 50622 [SYN, ACK] Seq=0 Ack=1","plain"]]},
+ {ph:1, arrow:"a1", dir:"fwd", pkt:["ACK","plain"], title:"Conexión TCP establecida (ACK)",
+  text:`Conexión TCP establecida.<br><br>En SSH ahora vendría el acuerdo de algoritmos, el envío de la clave pública, la verificación y la clave de sesión…<br><br>En Telnet <b>no hay nada de eso</b>: se pasa directamente a enviar datos.`,
+  tip:`No hay ninguna comprobación de que el servidor sea quien dice ser. Un atacante podría hacerse pasar por él sin que el cliente lo notase.`, warn:1,
+  term:[["dimt","Connected to 192.168.1.20.\nEscape character is '^]'.\n"]],
+  sniff:[[C,S,"TCP","50622 → 23 [ACK] Seq=1 Ack=1","plain"]]},
+
+ {ph:2, arrow:"a6", dir:"rev", pkt:["login:","plain"], insecure:1, title:"El servidor pide el usuario",
+  text:`El servidor envía su mensaje de bienvenida y la petición de usuario (<code>login:</code>).<br><br>El atacante ya sabe qué sistema operativo tiene el servidor y el nombre de la máquina.`,
+  term:[["","Debian GNU/Linux 12\n"],["","servidor login: "]],
+  sniff:[[S,C,"TELNET","Data: Debian GNU/Linux 12\\r\\nservidor login: ","plain"]]},
+ {ph:2, arrow:"a6", dir:"fwd", pkt:["a l u m n o","plain"], insecure:1, title:"El usuario escribe su nombre",
+  text:`El alumno escribe <code>alumno</code>. Telnet envía <b>cada tecla en un paquete distinto</b>, en el momento en que se pulsa.<br><br>Mira el panel del atacante: aparece letra a letra.`,
+  tip:`Además, el servidor devuelve cada letra (<i>eco</i>) para que aparezca en la pantalla del cliente. Así que cada carácter cruza la red dos veces.`,
+  term:[["in","alumno\n"]],
+  sniff:keyRows(USER,"plain")},
+ {ph:2, arrow:"a6", dir:"rev", pkt:["Password:","plain"], insecure:1, title:"El servidor pide la contraseña",
+  text:`El servidor pide la contraseña. En la pantalla del cliente no se mostrará lo que se escriba… pero eso <b>no significa que viaje oculta</b>.`,
+  term:[["","Password: "]],
+  sniff:[[S,C,"TELNET","Data: Password: ","plain"]]},
+ {ph:2, arrow:"a6", dir:"fwd", pkt:["🔓 Secreto1","danger"], insecure:1, title:"⚠️ ¡La contraseña viaja en claro!",
+  text:`El alumno escribe su contraseña. En su terminal no aparece nada, pero por la red viaja <b>carácter a carácter y sin cifrar</b>.<br><br>El atacante la acaba de capturar: <code>${PASS}</code>. Con ella puede entrar al servidor cuando quiera.`,
+  tip:`Para capturarla no hace falta ser un experto: basta con Wireshark y el filtro <code>telnet</code>, o la opción <i>Seguir → Flujo TCP</i>. Compáralo con el paso de autenticación en SSH, donde el atacante solo ve bytes sin sentido.`, warn:1,
+  term:[["","\n"]],
+  sniff:keyRows(PASS,"danger")},
+ {ph:2, arrow:"a6", dir:"rev", pkt:["Bienvenido","plain"], insecure:1, title:"Sesión iniciada",
+  text:`El servidor acepta el usuario y la contraseña y abre una shell. El mensaje de bienvenida y el prompt también viajan en claro.`,
+  term:[["dimt","Linux servidor 6.1.0-18-amd64 #1 SMP Debian x86_64\n"],["p","alumno@servidor:~$ "]],
+  sniff:[[S,C,"TELNET","Data: Linux servidor 6.1.0-18-amd64 … alumno@servidor:~$ ","plain"]]},
+ {ph:2, arrow:"a6", dir:"fwd", pkt:["ls -l","plain"], insecure:1, title:"Enviando un comando",
+  text:`El alumno ejecuta <code>ls -l</code>. El atacante ve exactamente qué comandos se escriben.`,
+  term:[["in","ls -l\n"]],
+  sniff:keyRows("ls -l","plain")},
+ {ph:2, arrow:"a6", dir:"rev", pkt:["Resultado","plain"], insecure:1, title:"Respuesta del servidor",
+  text:`El resultado del comando también llega en claro: el atacante ve los nombres de los ficheros y, si se abriera uno con <code>cat</code>, vería su contenido completo.<br><br>Además, como nada está protegido, un atacante situado en medio podría incluso <b>modificar</b> los datos por el camino.`,
+  term:[["","total 8\n-rw-r--r-- 1 alumno alumno  220 sep 20 10:02 apuntes.txt\ndrwxr-xr-x 2 alumno alumno 4096 sep 25 12:40 practicas\n"],["p","alumno@servidor:~$ "]],
+  sniff:[[S,C,"TELNET","Data: total 8\\r\\n-rw-r--r-- 1 alumno alumno 220 … apuntes.txt\\r\\ndrwxr-xr-x … practicas","plain"]]},
+ {ph:2, arrow:"a6", dir:"both", pkt:["exit","plain"], insecure:1, final:1, title:"Lo que se ha llevado el atacante",
+  text:`El alumno escribe <code>exit</code> y se cierra la conexión. Así ve el atacante toda la sesión en Wireshark (<i>Seguir → Flujo TCP</i>). Lo que escribe el cliente está en rojo, y lo que envía el servidor, en azul:${STREAM}${COMPARE}`,
+  tip:`Por eso Telnet ya no debe usarse para administrar equipos: se sustituye por <b>SSH</b>. Cambia arriba a <b>🔒 SSH</b> para ver la diferencia.`,
+  term:[["in","exit\n"],["dimt","logout\nConnection closed by foreign host.\n"],["p","alumno@cliente:~$ "]],
+  sniff:[...keyRows("exit","plain"),[S,C,"TCP","23 → 50622 [FIN, ACK]","plain"]]}
+];
+
+const MODES = {
+  ssh:{steps:SSH_STEPS, phases:SSH_PHASES, arrows:["a1","a2","a3","a4","a5","a6"], labels:["l1","l2","l3","l4","l5","l6"], port:22,
+       h1:"Simulador del protocolo SSH", sub:"Cómo se establece una conexión segura entre cliente y servidor, paso a paso",
+       badge:["🔒 Canal cifrado · aes256-ctr","#16a34a"]},
+  telnet:{steps:TELNET_STEPS, phases:TELNET_PHASES, arrows:["a1","a6"], labels:["t1","t2"], port:23,
+       h1:"Simulador del protocolo Telnet", sub:"Una conexión remota sin cifrar: todo viaja en claro por la red",
+       badge:["⚠️ Canal SIN cifrar · todo en claro","#dc2626"]}
+};
+let MODE = MODES.ssh, STEPS = MODE.steps, PHASES = MODE.phases;
+
+/* ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+let cur = 0, token = 0, playing = false, playTimer = null;
+const speed = () => parseFloat($("speed").value);
+
+function setMode(m){
+  MODE = MODES[m]; STEPS = MODE.steps; PHASES = MODE.phases;
+  document.body.classList.toggle("telnet", m === "telnet");
+  document.querySelectorAll("#mode button").forEach(b => b.classList.toggle("on", b.dataset.m === m));
+  $("phases").innerHTML = PHASES.map((p,i)=>`<div class="phase" data-p="${i+1}"><b>${i+1}</b>${p}</div>`).join('');
+  $("h1").textContent = MODE.h1; $("sub").textContent = MODE.sub;
+  document.title = m === "ssh" ? "Simulador SSH" : "Simulador Telnet";
+  $("srvIp").textContent = "192.168.1.20:" + MODE.port;
+  $("lockText").textContent = MODE.badge[0];
+  $("lockRect").setAttribute("fill", MODE.badge[1]);
+  $("lockRect").setAttribute("width", m === "ssh" ? 236 : 276);
+  $("lockRect").setAttribute("x", m === "ssh" ? -118 : -138);
+  ["a1","a2","a3","a4","a5","a6","l1","l2","l3","l4","l5","l6","t1","t2"].forEach(id => $(id).classList.add("hide"));
+}
+
+function hex(seed, n){
+  let x = seed * 2654435761 >>> 0, out = [];
+  for(let i=0;i<n;i++){ x = (x * 1103515245 + 12345) >>> 0; out.push(((x>>>16)&255).toString(16).padStart(2,"0")); }
+  return out.join(" ");
+}
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+function setArrows(step){
+  const last = MODE.arrows.length;
+  MODE.arrows.forEach((aid, idx) => {
+    const k = idx + 1, a = $(aid), l = $(MODE.labels[idx]);
+    let st = k < step.ph ? "done" : k === step.ph ? "active" : "dim";
+    if(step.final) st = k === last ? "active" : "done";
+    a.setAttribute("class","arrow "+st);
+    l.setAttribute("class","lbl "+(l.id==="l5"?"lbl5 ":"")+st);
+    a.setAttribute("marker-end",`url(#m-${st})`);
+    if(a.dataset.both) a.setAttribute("marker-start",`url(#m-${st})`);
+  });
+  ["i","ii","iii","iv"].forEach(s => $("s5"+s).classList.toggle("cur", step.ph===5 && step.sub===s));
+  document.querySelectorAll(".phase").forEach(el=>{
+    const p = +el.dataset.p;
+    el.className = "phase " + (p < step.ph || step.final ? "done" : p === step.ph ? "active" : "");
+  });
+  $("lockBadge").classList.toggle("on", !!(step.secure || step.insecure));
+  ["cli","srv"].forEach(id => {
+    $(id).classList.toggle("secure", !!step.secure);
+    $(id).classList.toggle("insecure", !!step.insecure);
+  });
+}
+
+function render(i, animate=true){
+  cur = i; token++;
+  const step = STEPS[i];
+  $("pktLayer").innerHTML = "";
+  setArrows(step);
+
+  // Explicación
+  const ex = $("explain");
+  ex.classList.remove("fade"); void ex.offsetWidth; ex.classList.add("fade");
+  ex.innerHTML = `
+    <h3>📖 Explicación</h3>
+    <span class="badge">${step.ph ? (step.final ? "Fin de la conexión" : "Paso "+step.ph+" · "+PHASES[step.ph-1]) : "Introducción"}</span>
+    <h2>${step.title}</h2>
+    <div class="txt">${step.text}${step.flow ? flowHTML(step.flow) : ""}</div>
+    ${step.tip ? `<div class="tip ${step.warn?"warn":""}">💡 ${step.tip}</div>` : ""}`;
+
+  // Estado acumulado: terminal, capturas y claves
+  let term = "", rows = [], kc = {}, ks = {}, n = 0;
+  STEPS.slice(0, i+1).forEach((s, si) => {
+    const isNew = si === i;
+    (s.term||[]).forEach(([c,t]) => term += `<span class="${c} ${isNew?"nl":""}">${esc(t)}</span>`);
+    (s.sniff||[]).forEach(r => rows.push({r, n:++n, isNew}));
+    Object.entries(s.kc||{}).forEach(([k,v]) => kc[k] = {v, isNew});
+    Object.entries(s.ks||{}).forEach(([k,v]) => ks[k] = {v, isNew});
+  });
+  $("term").innerHTML = term + '<span class="cursor"></span>';
+  $("term").scrollTop = 1e6;
+
+  const chips = o => Object.values(o).map(({v,isNew}) =>
+    `<div class="chip ${isNew?"new":""} ${v[2]?"secret":""}"><span>${v[0]}</span><span>${v[1]}</span></div>`).join('') || '<div class="empty">—</div>';
+  $("kc").innerHTML = chips(kc);
+  $("ks").innerHTML = chips(ks);
+
+  $("sniff").innerHTML = rows.length ? `<table><tr><th>Nº</th><th>Origen</th><th>Destino</th><th>Protocolo</th><th>Información</th></tr>` +
+    rows.map(({r,n,isNew}) => {
+      const [src,dst,proto,info,kind] = r;
+      const data = (kind === "plain" || kind === "danger") ? "" : `<div class="hex">${hex(n*7+3, 24)} …</div>`;
+      return `<tr class="${kind} ${isNew?"new":""}"><td>${n}</td><td>${src}</td><td>${dst}</td><td>${proto}</td><td>${esc(info)}${data}</td></tr>`;
+    }).join('') + `</table>` : `<div class="empty">Aún no se ha capturado ningún paquete.</div>`;
+  $("sniff").scrollTop = 1e6;
+
+  // Controles
+  $("counter").textContent = `${i+1} / ${STEPS.length}`;
+  $("bar").style.width = ((i+1)/STEPS.length*100) + "%";
+  $("prev").disabled = i === 0;
+  $("next").disabled = i === STEPS.length-1;
+
+  // Animación del paquete
+  const done = step.pkt && animate ? sendPacket(step) : Promise.resolve();
+  done.then(() => scheduleNext(step));
+}
+
+function makePkt(label, kind){
+  const g = document.createElementNS(NS,"g");
+  g.setAttribute("class","pkt "+kind);
+  const r = document.createElementNS(NS,"rect"), t = document.createElementNS(NS,"text");
+  t.textContent = label; t.setAttribute("y","5");
+  g.append(r,t); $("pktLayer").appendChild(g);
+  const w = t.getBBox().width + 22;
+  r.setAttribute("x",-w/2); r.setAttribute("y",-14); r.setAttribute("width",w); r.setAttribute("height",28); r.setAttribute("rx",14);
+  g.setAttribute("transform","translate(-100 -100)");
+  return g;
+}
+
+function move(path, rev, g, dur, tk){
+  return new Promise(res => {
+    const L = path.getTotalLength(), t0 = performance.now();
+    function f(now){
+      if(tk !== token){ g.remove(); return res(false); }
+      const p = Math.min(1, (now - t0) / dur);
+      const e = p < .5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;
+      const pt = path.getPointAtLength((rev ? 1-e : e) * L);
+      g.setAttribute("transform",`translate(${pt.x} ${pt.y})`);
+      if(p < 1) requestAnimationFrame(f);
+      else setTimeout(() => { g.remove(); res(true); }, 200);
+    }
+    requestAnimationFrame(f);
+  });
+}
+
+const TARGET = {a1:"srv", a2:"srv", a3:"cli", a4:"cli", a5:"srv", a6:"srv"};
+function pulse(id){ const b=$(id); b.classList.remove("pulse"); void b.getBBox(); b.classList.add("pulse"); }
+
+function sendPacket(step){
+  const path = $(step.arrow), tk = token;
+  const dur = (step.arrow === "a4" ? 1500 : 1900) / speed();
+  const [label, kind] = step.pkt;
+  const flip = id => id === "srv" ? "cli" : "srv";
+  const tgt = TARGET[step.arrow];
+  if(step.dir === "both"){
+    return Promise.all([move(path,false,makePkt(label,kind),dur,tk), move(path,true,makePkt(label,kind),dur,tk)])
+      .then(ok => { if(ok[0]){ pulse("cli"); pulse("srv"); } });
+  }
+  const rev = step.dir === "rev";
+  return move(path, rev, makePkt(label,kind), dur, tk).then(ok => {
+    if(ok) pulse(step.arrow === "a4" ? "cli" : rev ? flip(tgt) : tgt);
+  });
+}
+
+function scheduleNext(step){
+  clearTimeout(playTimer);
+  if(!playing) return;
+  if(cur >= STEPS.length-1){ setPlaying(false); return; }
+  const words = (step.text + (step.tip||"")).replace(/<[^>]+>/g,"").split(/\s+/).length;
+  const tk = token;
+  playTimer = setTimeout(() => { if(tk === token && playing) render(cur+1); }, (2500 + words*140) / speed());
+}
+
+function setPlaying(v){
+  playing = v;
+  $("play").textContent = v ? "⏸ Pausa" : "⏵ Auto";
+  $("play").classList.toggle("playing", v);
+  clearTimeout(playTimer);
+  if(v){ if(cur >= STEPS.length-1) render(0); else render(cur+1); }
+}
+
+$("next").onclick = () => { if(cur < STEPS.length-1) render(cur+1); };
+$("prev").onclick = () => { if(cur > 0) render(cur-1); };
+$("reset").onclick = () => { setPlaying(false); render(0); };
+$("play").onclick = () => setPlaying(!playing);
+$("speed").oninput = () => $("speedv").textContent = speed() + "x";
+document.addEventListener("keydown", e => {
+  if(e.target.tagName === "INPUT") return;
+  if(e.key === "ArrowRight" || e.key === " "){ e.preventDefault(); $("next").click(); }
+  if(e.key === "ArrowLeft"){ e.preventDefault(); $("prev").click(); }
+});
+
+document.querySelectorAll("#mode button").forEach(b => b.onclick = () => {
+  if(MODE === MODES[b.dataset.m]) return;
+  setPlaying(false); setMode(b.dataset.m); render(0);
+});
+
+setMode("ssh");
+render(0);
+</script>
+</body>
+</html>
