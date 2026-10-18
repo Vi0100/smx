@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador DHCP</title>
+<style>
+:root{
+  --bg:#f6f1ea; --card:#ffffff; --ink:#2b2118; --muted:#7d6f63; --line:#ebe2d8;
+  --green:#3a9d74; --green-d:#2c7a5a; --brown:#7a4a2e; --dim:#ddd3c9; --accent:#e0662b;
+  --disc:#2563eb; --offer:#e0901e; --req:#7c3aed; --ack:#16a34a; --nak:#dc2626; --rel:#64748b; --arp:#0891b2;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink);
+  background:
+    radial-gradient(1100px 600px at 5% -10%, #e4eefc 0%, transparent 60%),
+    radial-gradient(900px 500px at 105% 0%, #f8e4d6 0%, transparent 60%),
+    var(--bg);
+  min-height:100vh;
+}
+header{max-width:1440px;margin:0 auto;padding:22px 16px 6px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 24px;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#f59e0b,#d97706);display:grid;place-items:center;color:#fff;font:800 13px ui-monospace,Consolas,monospace;box-shadow:0 6px 18px rgba(217,119,6,.35)}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}
+.sub{margin:2px 0 0;color:var(--muted);font-size:14px}
+.hdr-right{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.mode{display:flex;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px;box-shadow:0 4px 14px rgba(70,45,20,.06)}
+.mode button{border:none;padding:8px 13px;border-radius:10px;background:transparent;color:var(--muted);font-size:13.5px}
+.mode button:hover{transform:none;background:#faf6f1}
+.mode button.on{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff}
+.phases{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.phase{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:13px;color:var(--muted);transition:.3s}
+.phase b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--dim);color:#fff;font-size:11px}
+.phase.done{color:var(--brown)} .phase.done b{background:var(--brown)}
+.phase.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(224,102,43,.35)} .phase.active b{background:#fff;color:var(--accent)}
+
+.layout{max-width:1440px;margin:0 auto;padding:12px 16px 28px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 28px rgba(70,45,20,.07);padding:16px}
+.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:flex;align-items:center;gap:8px}
+
+/* ---------- Esquema ---------- */
+#scheme{width:100%;height:auto;display:block}
+.link{fill:none;stroke:#cfc4b8;stroke-width:4;transition:stroke .3s}
+.link.on{stroke:var(--accent);stroke-dasharray:12 7;animation:dash 1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-19}}
+.node{transform-box:fill-box;transform-origin:center;transition:opacity .4s,filter .4s}
+.node rect.b{stroke-width:2;transition:stroke .3s}
+.node text{text-anchor:middle}
+.node .name{font-size:15px;font-weight:700;fill:#fff}
+.node .ip{font:700 17px ui-monospace,Consolas,monospace;fill:#fff}
+.node .mac{font:11.5px ui-monospace,Consolas,monospace;fill:#fff;opacity:.85}
+.node.hl rect.b{stroke:var(--accent);stroke-width:4;filter:url(#glow)}
+.node.off{opacity:.45;filter:grayscale(1)}
+.node.pulse{animation:pulse .7s ease}
+@keyframes pulse{0%{transform:scale(1)}40%{transform:scale(1.07)}100%{transform:scale(1)}}
+.node.newip .ip{animation:flaship 1.2s ease}
+@keyframes flaship{0%,100%{fill:#fff}30%{fill:#fde047}}
+.pkt rect{stroke:#fff;stroke-width:2;filter:drop-shadow(0 3px 5px rgba(0,0,0,.25))}
+.pkt text{fill:#fff;font:700 12.5px system-ui,Segoe UI,sans-serif;text-anchor:middle}
+.pkt.disc rect{fill:var(--disc)} .pkt.offer rect{fill:var(--offer)} .pkt.req rect{fill:var(--req)} .pkt.ack rect{fill:var(--ack)}
+.pkt.nak rect,.pkt.dead rect{fill:var(--nak)} .pkt.rel rect{fill:var(--rel)} .pkt.arp rect{fill:var(--arp)}
+.bubble{font:700 13px system-ui,Segoe UI,sans-serif;text-anchor:middle;animation:bub 1.8s ease forwards}
+.bubble.no{fill:#94a3b8} .bubble.yes{fill:#16a34a} .bubble.bad{fill:#dc2626}
+@keyframes bub{0%{opacity:0;transform:translateY(6px)}15%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0}}
+
+/* Línea de tiempo de la concesión */
+.lease{margin-top:6px;padding:10px 12px 26px;border-radius:12px;background:#faf6f1;border:1px solid var(--line);display:none}
+.lease.on{display:block}
+.lease .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px}
+.lease .top b{font-family:ui-monospace,Consolas,monospace}
+.track{position:relative;height:14px;border-radius:7px;background:linear-gradient(90deg,#dcfce7 0 50%,#fef3c7 50% 87.5%,#fee2e2 87.5% 100%)}
+.fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px;background:linear-gradient(90deg,#16a34a,#e0901e 70%,#dc2626);width:0;transition:width 1.6s ease;opacity:.85}
+.mark{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.mark span{position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:11.5px;white-space:nowrap;color:var(--muted);font-weight:600}
+
+/* ---------- Controles ---------- */
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
+button{font:600 14px system-ui,Segoe UI,sans-serif;border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 14px;border-radius:11px;cursor:pointer;transition:.15s}
+button:hover{border-color:var(--brown);transform:translateY(-1px)}
+button.primary{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;border:none;box-shadow:0 4px 14px rgba(58,157,116,.35)}
+button.playing{background:var(--accent);color:#fff;border-color:var(--accent)}
+button:disabled{opacity:.4;cursor:default;transform:none}
+.speed{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-left:auto}
+.counter{font:600 13px ui-monospace,Consolas,monospace;color:var(--muted)}
+.progress{height:5px;border-radius:5px;background:var(--line);margin-top:10px;overflow:hidden}
+.progress div{height:100%;width:0;background:linear-gradient(90deg,#f59e0b,var(--accent));transition:width .4s}
+
+/* ---------- Explicación ---------- */
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:#fdebe1;color:var(--accent);margin-bottom:8px}
+.explain h2{margin:0 0 10px;font-size:22px;letter-spacing:-.01em}
+.explain .txt{font-size:15.5px;line-height:1.6}
+.explain code,.tip code{background:#f3ece4;padding:1px 6px;border-radius:6px;font-size:.9em;font-family:ui-monospace,Consolas,monospace}
+.tip{margin-top:14px;padding:11px 14px;border-radius:12px;background:#eef7f2;border-left:4px solid var(--green);font-size:14px;line-height:1.5}
+.tip.warn{background:#fff4e5;border-left-color:var(--offer)}
+.fade{animation:fadeUp .45s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+pre.conf{margin:10px 0 0;padding:12px;border-radius:12px;background:#1b1d23;color:#e2e8f0;font:12.5px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap}
+pre.conf .k{color:#93c5fd} pre.conf .v{color:#fdba74} pre.conf .c{color:#6b7280;font-style:italic} pre.conf .h{background:#7c3aed;color:#fff;border-radius:4px;padding:0 3px}
+.dora{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.dora div{border-radius:10px;padding:8px 6px;text-align:center;color:#fff;font-size:12px;line-height:1.3}
+.dora b{display:block;font-size:20px}
+
+/* ---------- Fila inferior ---------- */
+.bottom{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.55fr) minmax(0,.9fr);gap:16px}
+.term{background:#14161c;border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 1px #2a2e38}
+.term.win{background:#0c0c0c}
+.term .bar{display:flex;gap:6px;align-items:center;padding:8px 12px;background:#232731}
+.term .bar i{width:11px;height:11px;border-radius:50%;display:block}
+.term .bar span{margin-left:8px;color:#9aa3b2;font-size:12px}
+.term pre{margin:0;padding:12px 14px;height:300px;overflow:auto;color:#d6dde8;font:12.5px/1.55 ui-monospace,Consolas,"Courier New",monospace;white-space:pre-wrap;word-break:break-word}
+.term .p{color:#7ee787} .term .in{color:#fff;font-weight:700} .term .dimt{color:#7b8494} .term .ok{color:#56d4dd} .term .w{color:#f0b429} .term .er{color:#ff7b72} .term .cm{color:#a5a5a5;font-style:italic}
+.term .nl{animation:fadeUp .4s}
+.cursor{display:inline-block;width:8px;height:15px;background:#7ee787;vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.ws{border-radius:12px;border:1px solid var(--line);overflow:hidden;font:12px/1.4 ui-monospace,Consolas,monospace}
+.ws .list{height:150px;overflow:auto}
+.ws table{width:100%;border-collapse:collapse;table-layout:fixed}
+.ws th{position:sticky;top:0;z-index:1;background:#2b2118;color:#f6f1ea;text-align:left;padding:5px 7px;font-weight:600}
+.ws th:nth-child(1){width:30px} .ws th:nth-child(2),.ws th:nth-child(3){width:108px} .ws th:nth-child(4){width:52px}
+.ws td{padding:4px 7px;border-bottom:1px solid var(--line);overflow-wrap:anywhere;cursor:pointer;border-left:0}
+.ws tr td:first-child{border-left:4px solid var(--c)}
+.ws tr:hover td{background:#faf6f1}
+.ws tr.sel td{background:#fff1e6}
+.ws tr.new td{animation:fadeUp .45s}
+.ws .det{height:180px;overflow:auto;background:#fcfaf7;border-top:2px solid #2b2118;padding:6px 10px}
+.ws .det h5{margin:6px 0 2px;font-size:12px;color:var(--brown)}
+.ws .det div{display:flex;gap:8px;padding:1px 0 1px 12px}
+.ws .det div span:first-child{color:var(--muted);min-width:190px}
+.ws .det div.hl{background:#fff3c4;border-radius:4px}
+.ws .hint{color:var(--muted);font-style:italic;padding:2px 0 4px}
+.pool{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
+.cell{aspect-ratio:1.6;border-radius:4px;background:#efe8e0;font:600 9.5px ui-monospace,Consolas,monospace;color:#9a8c80;display:grid;place-items:center;transition:background .4s,color .4s}
+.cell.offered{background:#fde68a;color:#92400e;outline:2px solid #e0901e}
+.cell.leased{background:#16a34a;color:#fff}
+.cell.reserved{background:#fff;color:#7c3aed;outline:2px dashed #7c3aed}
+.cell.fixed{background:#7c3aed;color:#fff}
+.cell.new{animation:pulse .8s}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin:8px 0}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--c);border:1px solid var(--b,transparent)}
+pre.leases{margin:0;padding:10px;border-radius:10px;background:#1b1d23;color:#d1d5db;font:11.5px/1.45 ui-monospace,Consolas,monospace;height:120px;overflow:auto;white-space:pre-wrap}
+.empty{color:var(--muted);font-style:italic;padding:14px;text-align:center}
+
+@media (max-width:1100px){
+  .layout{grid-template-columns:1fr}
+  .bottom{grid-template-columns:1fr}
+  .hdr-right{align-items:flex-start}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">DHCP</div>
+    <div>
+      <h1>Simulador del protocolo DHCP</h1>
+      <p class="sub">Cómo obtiene un equipo su configuración de red de forma automática</p>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="mode" id="mode"></div>
+    <div class="phases" id="phases"></div>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="card">
+    <h3>📡 Red local 192.168.1.0/24</h3>
+    <svg id="scheme" viewBox="0 0 1000 460" role="img" aria-label="Esquema de la red local con servidor DHCP">
+      <defs>
+        <linearGradient id="gA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+        <linearGradient id="gS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#44ad83"/><stop offset="1" stop-color="#2f8a64"/></linearGradient>
+        <linearGradient id="gR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#64748b"/><stop offset="1" stop-color="#334155"/></linearGradient>
+        <linearGradient id="gW" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0ea5e9"/><stop offset="1" stop-color="#0369a1"/></linearGradient>
+        <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#e0662b" flood-opacity=".7"/></filter>
+      </defs>
+
+      <!-- Cables -->
+      <path id="lA" class="link" d="M240 240 H440"/>
+      <path id="lS" class="link" d="M760 240 H560"/>
+      <path id="lR" class="link" d="M500 124 V215"/>
+      <path id="lW" class="link" d="M500 350 V265"/>
+
+      <!-- Switch -->
+      <g>
+        <rect x="440" y="215" width="120" height="50" rx="8" fill="#1f2937" stroke="#111827" stroke-width="2"/>
+        <text x="500" y="237" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Switch</text>
+        <g fill="#4ade80"><circle cx="465" cy="252" r="3"/><circle cx="485" cy="252" r="3"/><circle cx="505" cy="252" r="3"/><circle cx="525" cy="252" r="3"/></g>
+      </g>
+
+      <!-- Equipos -->
+      <g id="nA" class="node">
+        <rect class="b" x="40" y="186" width="200" height="108" rx="10" fill="url(#gA)" stroke="#1e40af"/>
+        <text class="name" x="140" y="212">💻 Cliente XUbuntu</text>
+        <text class="ip" id="ipA" x="140" y="248">0.0.0.0</text>
+        <text class="mac" x="140" y="276">08:00:27:a6:a0:c6</text>
+      </g>
+      <g id="nS" class="node">
+        <rect class="b" x="760" y="186" width="200" height="108" rx="10" fill="url(#gS)" stroke="#2c7a5a"/>
+        <text class="name" x="860" y="212">🗄️ Servidor DHCP</text>
+        <text class="ip" id="ipS" x="860" y="248">192.168.1.2</text>
+        <text class="mac" id="subS" x="860" y="276">isc-dhcp-server</text>
+      </g>
+      <g id="nR" class="node">
+        <rect class="b" x="400" y="20" width="200" height="104" rx="10" fill="url(#gR)" stroke="#1e293b"/>
+        <text class="name" x="500" y="46">🌐 Router (puerta enlace)</text>
+        <text class="ip" id="ipR" x="500" y="80">192.168.1.1</text>
+        <text class="mac" x="500" y="106">08:00:27:aa:bb:01</text>
+      </g>
+      <g id="nW" class="node">
+        <rect class="b" x="400" y="350" width="200" height="104" rx="10" fill="url(#gW)" stroke="#075985"/>
+        <text class="name" x="500" y="376">🖥️ Cliente Windows 10</text>
+        <text class="ip" id="ipW" x="500" y="410">192.168.1.120</text>
+        <text class="mac" x="500" y="436">08:00:27:3b:5e:91</text>
+      </g>
+
+      <g id="fxLayer"></g>
+      <g id="pktLayer"></g>
+    </svg>
+
+    <div class="lease" id="lease">
+      <div class="top"><span>⏱️ Concesión de <b id="leaseIp"></b> · 600 s</span><span id="leaseT"></span></div>
+      <div class="track">
+        <div class="fill" id="leaseFill"></div>
+        <div class="mark" style="left:50%"><span>T1 · 50 % (300 s)</span></div>
+        <div class="mark" style="left:87.5%"><span>T2 · 87,5 %</span></div>
+        <div class="mark" style="left:calc(100% - 2px)"><span>Caduca</span></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="reset">⟲ Reiniciar</button>
+      <button id="prev" title="Anterior (←)">◀ Anterior</button>
+      <button id="next" class="primary" title="Siguiente (→ o espacio)">Siguiente ▶</button>
+      <button id="play">⏵ Auto</button>
+      <span class="counter" id="counter"></span>
+      <label class="speed">Velocidad
+        <input type="range" id="speed" min="0.5" max="2" step="0.25" value="1">
+        <span id="speedv">1x</span>
+      </label>
+    </div>
+    <div class="progress"><div id="bar"></div></div>
+  </section>
+
+  <section class="card explain" id="explain"></section>
+
+  <div class="bottom">
+    <section class="card">
+      <h3>⌨️ Terminal del cliente</h3>
+      <div class="term" id="termBox">
+        <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span id="termTitle"></span></div>
+        <pre id="term"></pre>
+      </div>
+    </section>
+    <section class="card">
+      <h3>🦈 Wireshark · filtro <code style="text-transform:none">dhcp || arp</code></h3>
+      <div class="ws">
+        <div class="list" id="wsList"></div>
+        <div class="det" id="wsDet"></div>
+      </div>
+    </section>
+    <section class="card">
+      <h3>🗄️ Servidor: rango 192.168.1.101 – .200</h3>
+      <div class="pool" id="pool"></div>
+      <div class="legend">
+        <span style="--c:#efe8e0">Libre</span>
+        <span style="--c:#fde68a;--b:#e0901e">Ofrecida</span>
+        <span style="--c:#16a34a">Concedida</span>
+        <span style="--c:#fff;--b:#7c3aed">Reservada</span>
+        <span style="--c:#7c3aed">Reserva en uso</span>
+      </div>
+      <pre class="leases" id="leases"></pre>
+    </section>
+  </div>
+</main>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const MAC = {A:"08:00:27:a6:a0:c6", W:"08:00:27:3b:5e:91", S:"08:00:27:11:22:33", R:"08:00:27:aa:bb:01"};
+const BC = "ff:ff:ff:ff:ff:ff";
+const TY = {disc:"DHCPDISCOVER", offer:"DHCPOFFER", req:"DHCPREQUEST", ack:"DHCPACK", nak:"DHCPNAK", rel:"DHCPRELEASE", arp:"ARP"};
+const COLOR = {disc:"#2563eb", offer:"#e0901e", req:"#7c3aed", ack:"#16a34a", nak:"#dc2626", rel:"#64748b", arp:"#0891b2"};
+
+/* Opciones DHCP que envía el servidor */
+const OPTS = ip => [
+  ["Opción 54 · Servidor DHCP","192.168.1.2",1],
+  ["Opción 51 · Tiempo de concesión","600 s (10 min)",1],
+  ["Opción 1 · Máscara de subred","255.255.255.0"],
+  ["Opción 3 · Router (puerta de enlace)","192.168.1.1"],
+  ["Opción 6 · Servidor DNS","8.8.8.8"],
+  ["Opción 15 · Nombre de dominio","noentiendo.com"]
+];
+const PRL = ["Opción 55 · Parámetros solicitados","Máscara, Router, DNS, Dominio…"];
+
+/* Fila de Wireshark para un paquete DHCP */
+function dhcp(ty, o){
+  const det = [
+    ["Ethernet II", [["MAC origen", o.sm], ["MAC destino", o.dm === BC ? BC + " (Broadcast)" : o.dm, o.dm === BC]]],
+    ["IPv4", [["IP origen", o.si, o.si === "0.0.0.0"], ["IP destino", o.di, o.di === "255.255.255.255"]]],
+    ["UDP", [["Puerto origen", o.sp], ["Puerto destino", o.dp]]],
+    ["DHCP", [["Opción 53 · Tipo de mensaje", TY[ty], 1], ["ID de transacción", o.x], ["IP del cliente (ciaddr)", o.ci || "0.0.0.0"], ["Tu IP (yiaddr)", o.yi || "0.0.0.0", !!o.yi], ["MAC del cliente (chaddr)", o.ch], ...(o.op || [])]]
+  ];
+  return {src:o.si, dst:o.di, proto:"DHCP", info:`${TY[ty]} - Transaction ID ${o.x}`, ty, det};
+}
+function arp(o){
+  return {src:o.sm, dst:"Broadcast", proto:"ARP", info:o.info, ty:"arp",
+    det:[["Ethernet II", [["MAC origen", o.sm], ["MAC destino", BC + " (Broadcast)", 1]]],
+         ["ARP", [["Operación", "Petición (1)"], ["MAC del emisor", o.sm], ["IP del emisor", o.sip, 1], ["MAC buscada", "00:00:00:00:00:00"], ["IP buscada", o.tip, 1]]]]};
+}
+
+/* ============================ ESCENARIOS ============================
+   Paso: ph, title, text, tip, warn
+   pkts: [{f, t:"*" o nodo, ty, proc, lost, ign}]  (en secuencia)
+   ws: filas Wireshark · term: [[clase,texto]] · pool:{n:estado} · ips:{nodo:ip} · off:{S:bool}
+   lease:{ip,pos,t} o null · leases: texto · hl: nodos a resaltar */
+const XA = "0x3903f326", XW = "0x7c41a9e2", XR = "0x5d20b7c1", XP = "0x1a6e44f0";
+const DORA_SUM = `<div class="dora">
+<div style="background:${COLOR.disc}"><b>D</b>Discover<br>📢 broadcast</div>
+<div style="background:${COLOR.offer}"><b>O</b>Offer</div>
+<div style="background:${COLOR.req}"><b>R</b>Request<br>📢 broadcast</div>
+<div style="background:${COLOR.ack}"><b>A</b>Ack</div></div>`;
+
+const CONF_HOST = `<pre class="conf"><span class="c"># /etc/dhcp/dhcpd.conf</span>
+<span class="k">subnet</span> <span class="v">192.168.1.0</span> <span class="k">netmask</span> <span class="v">255.255.255.0</span> {
+  <span class="k">range</span> <span class="v">192.168.1.101 192.168.1.200</span>;
+  <span class="k">option routers</span> <span class="v">192.168.1.1</span>;
+  <span class="k">option domain-name-servers</span> <span class="v">8.8.8.8</span>;
+}
+<span class="h">host windows10 {</span>
+<span class="h">  hardware ethernet 08:00:27:3b:5e:91;</span>
+<span class="h">  fixed-address 192.168.1.150;</span>
+<span class="h">}</span></pre>`;
+
+const LEASE_A = (s, e, st="active") => `lease 192.168.1.101 {
+  starts 6 2026/10/18 ${s};
+  ends 6 2026/10/18 ${e};
+  binding state ${st};
+  hardware ethernet 08:00:27:a6:a0:c6;
+  client-hostname "xubuntu";
+}`;
+
+const SCEN = {
+dora:{label:"① Asignación (DORA)", phases:["Discover","Offer","Request","Ack","Configurado"],
+  termTitle:"alumno@xubuntu: ~", win:false,
+  start:{ips:{A:"0.0.0.0",W:"192.168.1.120"}, pool:{120:"leased"}},
+  steps:[
+ {ph:0, title:"Un equipo sin dirección IP", hl:["A"],
+  text:`El <b>Cliente XUbuntu</b> acaba de conectarse a la red y <b>no tiene dirección IP</b> (0.0.0.0). Tampoco sabe la máscara, la puerta de enlace ni el DNS.<br><br><b>DHCP</b> (<i>Dynamic Host Configuration Protocol</i>) permite que el equipo obtenga toda esa configuración de forma automática, pidiéndosela a un <b>servidor DHCP</b>.<br><br>Usa <b>UDP</b>: el servidor escucha en el puerto <b>67</b> y el cliente en el <b>68</b>.`,
+  tip:`El problema: ¿cómo pregunta el cliente si no tiene IP ni sabe dónde está el servidor? La respuesta, en el siguiente paso.`,
+  term:[["p","alumno@xubuntu:~$ "],["in","ip -4 addr show enp0s3\n"],["","2: enp0s3: <BROADCAST,MULTICAST,UP> mtu 1500 state UP\n"],["dimt","    (sin dirección IPv4)\n"],["p","alumno@xubuntu:~$ "],["in","sudo dhclient -v enp0s3\n"]]},
+ {ph:1, title:"DHCPDISCOVER: «¿Hay algún servidor DHCP?»", hl:["A"],
+  pkts:[{f:"A", t:"*", ty:"disc", proc:"S"}],
+  text:`El cliente envía un <b>DHCPDISCOVER</b> a <b>toda la red</b> (difusión o <i>broadcast</i>):<br><br>• IP origen <code>0.0.0.0</code>: todavía no tiene IP.<br>• IP destino <code>255.255.255.255</code> y MAC destino <code>ff:ff:ff:ff:ff:ff</code>: va a todos.<br><br>El switch reenvía la trama a <b>todos los equipos</b>. El router y el otro cliente la reciben y la <b>ignoran</b>; solo el servidor DHCP la procesa.`,
+  tip:`En Wireshark (abajo) haz clic en cualquier paquete para ver sus campos. Los más importantes aparecen resaltados en amarillo.`,
+  term:[["","DHCPDISCOVER on enp0s3 to 255.255.255.255 port 67 interval 3\n"]],
+  ws:[dhcp("disc",{sm:MAC.A, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:XA, ch:MAC.A, op:[PRL]})]},
+ {ph:2, title:"DHCPOFFER: el servidor ofrece una IP", hl:["S"],
+  pkts:[{f:"S", t:"A", ty:"offer"}],
+  text:`El servidor busca en su rango (<code>192.168.1.101 – .200</code>) la primera dirección libre: la <b>192.168.1.101</b>. La marca como <b>ofrecida</b> y responde con un <b>DHCPOFFER</b> que incluye:<br><br>• La IP ofrecida (campo <code>yiaddr</code>)<br>• Máscara, puerta de enlace, DNS y dominio<br>• El <b>tiempo de concesión</b>: 600 s`,
+  tip:`Si hubiera varios servidores DHCP en la red, el cliente recibiría varias ofertas y se quedaría con la primera. Si no recibe ninguna, repite el Discover a los 2, 4, 8 y 16 segundos.`,
+  term:[["","DHCPOFFER of 192.168.1.101 from 192.168.1.2\n"]],
+  ws:[dhcp("offer",{sm:MAC.S, dm:MAC.A, si:"192.168.1.2", di:"192.168.1.101", sp:67, dp:68, x:XA, yi:"192.168.1.101", ch:MAC.A, op:OPTS()})],
+  pool:{101:"offered"}},
+ {ph:3, title:"DHCPREQUEST: «Me quedo con esa IP»", hl:["A"],
+  pkts:[{f:"A", t:"*", ty:"req", proc:"S"}],
+  text:`El cliente acepta la oferta enviando un <b>DHCPREQUEST</b>. Pide la IP <code>192.168.1.101</code> (opción 50) e indica <b>qué servidor ha elegido</b> (opción 54).<br><br>¿Por qué otra vez en <b>broadcast</b>? Porque el cliente <b>sigue sin tener IP</b> y, además, así se enteran todos los servidores: si otro servidor había hecho una oferta, sabe que no ha sido elegido y libera su IP.`,
+  term:[["","DHCPREQUEST for 192.168.1.101 on enp0s3 to 255.255.255.255 port 67\n"]],
+  ws:[dhcp("req",{sm:MAC.A, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:XA, ch:MAC.A, op:[["Opción 50 · IP solicitada","192.168.1.101",1],["Opción 54 · Servidor DHCP","192.168.1.2",1],PRL]})]},
+ {ph:4, title:"DHCPACK: concesión confirmada", hl:["S"],
+  pkts:[{f:"S", t:"A", ty:"ack"}],
+  text:`El servidor <b>registra la concesión</b> en <code>/var/lib/dhcp/dhcpd.leases</code> (abajo a la derecha) y confirma con un <b>DHCPACK</b>, que repite todos los parámetros de configuración.<br><br>La IP <code>.101</code> pasa de «ofrecida» a <b>concedida</b> durante 600 segundos.`,
+  tip:`Si la IP pedida ya no estuviera disponible, el servidor respondería con un <b>DHCPNAK</b> y el cliente tendría que empezar de nuevo con un Discover.`,
+  term:[["","DHCPACK of 192.168.1.101 from 192.168.1.2\n"]],
+  ws:[dhcp("ack",{sm:MAC.S, dm:MAC.A, si:"192.168.1.2", di:"192.168.1.101", sp:67, dp:68, x:XA, yi:"192.168.1.101", ch:MAC.A, op:OPTS()})],
+  pool:{101:"leased"}, leases:LEASE_A("10:00:00","10:10:00")},
+ {ph:5, title:"Comprobación ARP: ¿está libre de verdad?", hl:["A"],
+  pkts:[{f:"A", t:"*", ty:"arp", proc:null, no:"No es mía"}],
+  text:`Antes de usar la IP, el cliente pregunta con <b>ARP</b>: «¿Alguien tiene ya la 192.168.1.101?».<br><br>Si alguien respondiera, la IP estaría <b>duplicada</b> (por ejemplo, un equipo con esa IP puesta a mano) y el cliente la rechazaría con un <code>DHCPDECLINE</code>.<br><br>Nadie responde: el cliente <b>se configura</b> con la nueva IP. 🎉`,
+  term:[["ok","bound to 192.168.1.101 -- renewal in 300 seconds.\n"],["p","alumno@xubuntu:~$ "]],
+  ws:[arp({sm:MAC.A, sip:"0.0.0.0", tip:"192.168.1.101", info:"Who has 192.168.1.101? (ARP Probe)"})],
+  ips:{A:"192.168.1.101"}, lease:{ip:"192.168.1.101", pos:0, t:"t = 0 s"}},
+ {ph:5, title:"Configuración obtenida", hl:["A","R"],
+  text:`El cliente ya tiene toda su configuración de red, sin que nadie haya tenido que escribir nada:<br><br>• IP: <code>192.168.1.101/24</code><br>• Puerta de enlace: <code>192.168.1.1</code><br>• DNS: <code>8.8.8.8</code><br><br>Resumen del proceso, conocido como <b>DORA</b>:${DORA_SUM}`,
+  tip:`Los mensajes del cliente (Discover y Request) van en broadcast porque aún no tiene IP. Las respuestas del servidor pueden ir directas al cliente o en broadcast, según lo que pida el cliente (Windows, por ejemplo, las pide en broadcast).`,
+  term:[["in","ip -4 addr show enp0s3 | grep inet\n"],["","    inet 192.168.1.101/24 brd 192.168.1.255 scope global dynamic enp0s3\n"],["p","alumno@xubuntu:~$ "],["in","ip route | grep default\n"],["","default via 192.168.1.1 dev enp0s3\n"],["p","alumno@xubuntu:~$ "],["in","grep nameserver /etc/resolv.conf\n"],["","nameserver 8.8.8.8\n"],["p","alumno@xubuntu:~$ "]]},
+ {ph:5, title:"Liberar la IP: DHCPRELEASE", hl:["A","S"],
+  pkts:[{f:"A", t:"S", ty:"rel"}],
+  text:`Cuando el cliente ya no necesita la IP, puede <b>devolverla</b> al servidor con un <b>DHCPRELEASE</b>. Esta vez va <b>directo al servidor</b> (unicast): el cliente ya tiene IP y sabe quién es el servidor.<br><br>El servidor marca la <code>.101</code> como <b>libre</b>, lista para otro equipo.`,
+  tip:`Para liberar a mano: <code>sudo dhclient -r</code> en Linux o <code>ipconfig /release</code> en Windows. Para pedir de nuevo: <code>sudo dhclient</code> o <code>ipconfig /renew</code>.`,
+  term:[["in","sudo dhclient -r -v enp0s3\n"],["","DHCPRELEASE of 192.168.1.101 on enp0s3 to 192.168.1.2 port 67\n"],["p","alumno@xubuntu:~$ "]],
+  ws:[dhcp("rel",{sm:MAC.A, dm:MAC.S, si:"192.168.1.101", di:"192.168.1.2", sp:68, dp:67, x:"0x6b02d9a4", ci:"192.168.1.101", ch:MAC.A, op:[["Opción 54 · Servidor DHCP","192.168.1.2",1]]})],
+  pool:{101:"free"}, ips:{A:"0.0.0.0"}, lease:null, leases:LEASE_A("10:00:00","10:04:12","free")}
+]},
+
+renew:{label:"② Renovación y caducidad", phases:["Renovación en T1","Servidor caído","Caducidad"],
+  termTitle:"alumno@xubuntu: ~", win:false,
+  start:{ips:{A:"192.168.1.101",W:"192.168.1.120"}, pool:{101:"leased",120:"leased"}, lease:{ip:"192.168.1.101",pos:0,t:"t = 0 s"}, leases:LEASE_A("10:00:00","10:10:00")},
+  steps:[
+ {ph:0, title:"La IP es un préstamo", hl:["A"],
+  text:`El cliente ya tiene la IP <code>192.168.1.101</code>, pero <b>no es suya para siempre</b>: es una <b>concesión</b> (<i>lease</i>) de 600 segundos.<br><br>Fíjate en la barra de tiempo bajo el esquema. Hay dos momentos clave:<br>• <b>T1 (50 %)</b>: el cliente intenta renovar con <b>su</b> servidor.<br>• <b>T2 (87,5 %)</b>: si no lo ha conseguido, pregunta a <b>cualquier</b> servidor.`,
+  tip:`El tiempo se configura en <code>dhcpd.conf</code> con <code>default-lease-time</code> y <code>max-lease-time</code> (en segundos).`,
+  term:[["p","alumno@xubuntu:~$ "],["in","tail -f /var/log/syslog | grep dhclient\n"],["dimt","dhclient[812]: bound to 192.168.1.101 -- renewal in 300 seconds.\n"]]},
+ {ph:1, title:"Llega T1 (50 % del tiempo)", hl:["A"],
+  text:`Han pasado <b>300 segundos</b>, la mitad de la concesión. El cliente no espera a que se le acabe: intenta <b>renovar</b> ya.`,
+  lease:{ip:"192.168.1.101", pos:.5, t:"t = 300 s"}},
+ {ph:1, title:"DHCPREQUEST directo al servidor", hl:["A","S"],
+  pkts:[{f:"A", t:"S", ty:"req"}],
+  text:`Para renovar, el cliente envía un <b>DHCPREQUEST</b>, esta vez <b>directo</b> (unicast) a su servidor <code>192.168.1.2</code>.<br><br>Ya no hace falta broadcast: el cliente tiene IP y sabe quién es el servidor. Por eso <b>no hay Discover ni Offer</b>: la renovación solo usa dos mensajes.`,
+  term:[["","dhclient[812]: DHCPREQUEST for 192.168.1.101 on enp0s3 to 192.168.1.2 port 67\n"]],
+  ws:[dhcp("req",{sm:MAC.A, dm:MAC.S, si:"192.168.1.101", di:"192.168.1.2", sp:68, dp:67, x:XR, ci:"192.168.1.101", ch:MAC.A, op:[PRL]})]},
+ {ph:1, title:"DHCPACK: el reloj vuelve a cero", hl:["S"],
+  pkts:[{f:"S", t:"A", ty:"ack"}],
+  text:`El servidor acepta con un <b>DHCPACK</b> y amplía la concesión otros 600 segundos a contar desde ahora. La barra vuelve a empezar.<br><br>Mientras el servidor siga funcionando, el cliente <b>conserva siempre la misma IP</b> renovándola cada 300 s.`,
+  term:[["","dhclient[812]: DHCPACK of 192.168.1.101 from 192.168.1.2\n"],["ok","dhclient[812]: bound to 192.168.1.101 -- renewal in 300 seconds.\n"]],
+  ws:[dhcp("ack",{sm:MAC.S, dm:MAC.A, si:"192.168.1.2", di:"192.168.1.101", sp:67, dp:68, x:XR, ci:"192.168.1.101", yi:"192.168.1.101", ch:MAC.A, op:OPTS()})],
+  lease:{ip:"192.168.1.101", pos:0, t:"t = 0 s (renovada)"}, leases:LEASE_A("10:05:00","10:15:00")},
+ {ph:2, title:"¿Y si el servidor se cae?", hl:["S"],
+  text:`El administrador detiene el servicio: <code>sudo systemctl stop isc-dhcp-server</code>.<br><br>El cliente <b>no se entera</b> y sigue usando su IP con normalidad: la concesión sigue siendo válida.`,
+  term:[["cm","# (en el servidor: sudo systemctl stop isc-dhcp-server)\n"]],
+  off:{S:true}},
+ {ph:2, title:"En T1 el servidor no contesta", hl:["A"],
+  pkts:[{f:"A", t:"S", ty:"req", lost:true}],
+  text:`Llega de nuevo T1 y el cliente envía su DHCPREQUEST al servidor… pero <b>nadie responde</b>.<br><br>No pasa nada grave: el cliente sigue usando la IP y lo irá reintentando.`,
+  term:[["w","dhclient[812]: DHCPREQUEST for 192.168.1.101 on enp0s3 to 192.168.1.2 port 67\n"],["w","dhclient[812]: DHCPREQUEST for 192.168.1.101 on enp0s3 to 192.168.1.2 port 67\n"]],
+  ws:[dhcp("req",{sm:MAC.A, dm:MAC.S, si:"192.168.1.101", di:"192.168.1.2", sp:68, dp:67, x:"0x2f81c03a", ci:"192.168.1.101", ch:MAC.A, op:[PRL]})],
+  lease:{ip:"192.168.1.101", pos:.5, t:"t = 300 s · sin respuesta"}},
+ {ph:2, title:"T2 (87,5 %): se pregunta a cualquiera", hl:["A"],
+  pkts:[{f:"A", t:"*", ty:"req", proc:null, lost:true}],
+  text:`Al llegar a <b>T2</b>, el cliente deja de insistir con su servidor y envía el DHCPREQUEST en <b>broadcast</b>: «¿Algún servidor DHCP puede renovarme la 192.168.1.101?».<br><br>Si hubiera otro servidor DHCP en la red, podría responder. Aquí no hay ninguno.`,
+  term:[["w","dhclient[812]: DHCPREQUEST for 192.168.1.101 on enp0s3 to 255.255.255.255 port 67\n"]],
+  ws:[dhcp("req",{sm:MAC.A, dm:BC, si:"192.168.1.101", di:"255.255.255.255", sp:68, dp:67, x:"0x2f81c03a", ci:"192.168.1.101", ch:MAC.A, op:[PRL]})],
+  lease:{ip:"192.168.1.101", pos:.875, t:"t = 525 s · sin respuesta"}},
+ {ph:3, title:"La concesión caduca", hl:["A"],
+  pkts:[{f:"A", t:"*", ty:"disc", proc:null, lost:true}],
+  text:`Al llegar al <b>100 %</b>, la concesión caduca: el cliente <b>debe dejar de usar la IP</b> y vuelve a empezar desde cero con un <b>DHCPDISCOVER</b>.<br><br>Sin servidor DHCP, el equipo se queda <b>sin red</b>. (Windows, en este caso, se pondría una IP APIPA: míralo en el escenario ④.)`,
+  tip:`Moraleja: si el servidor DHCP cae, la red no se para al momento. Los equipos aguantan hasta que caducan sus concesiones. Por eso conviene que el tiempo de concesión no sea demasiado corto.`, warn:1,
+  term:[["er","dhclient[812]: Lease expired: removing 192.168.1.101 from enp0s3\n"],["","dhclient[812]: DHCPDISCOVER on enp0s3 to 255.255.255.255 port 67 interval 4\n"]],
+  ws:[dhcp("disc",{sm:MAC.A, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:"0x48c1e5b7", ch:MAC.A, op:[PRL]})],
+  lease:{ip:"192.168.1.101", pos:1, t:"t = 600 s · ¡caducada!"}, ips:{A:"0.0.0.0"}, pool:{101:"free"}}
+]},
+
+res:{label:"③ Reserva por MAC", phases:["Reserva en dhcpd.conf","DORA","IP fija obtenida"],
+  termTitle:"Símbolo del sistema · Windows 10", win:true,
+  start:{ips:{A:"192.168.1.101",W:"0.0.0.0"}, pool:{101:"leased",150:"reserved"}, leases:LEASE_A("10:00:00","10:10:00")},
+  steps:[
+ {ph:1, title:"Reservar una IP para un equipo concreto", hl:["S","W"],
+  text:`A veces interesa que un equipo reciba <b>siempre la misma IP</b> por DHCP: un servidor, una impresora o el PC del profesor.<br><br>En <code>/etc/dhcp/dhcpd.conf</code> se añade un bloque <code>host</code> que asocia la <b>MAC</b> del equipo con una <b>IP fija</b>:${CONF_HOST}`,
+  tip:`El servidor identifica al cliente por su <b>dirección MAC</b>, que viaja en todos los mensajes DHCP (campo <code>chaddr</code>). En Windows se consulta con <code>ipconfig /all</code> («Dirección física»).`,
+  term:[["p","C:\\Users\\alumno>"],["in","ipconfig /release\n"],["dimt","Adaptador de Ethernet Ethernet:\n   Dirección IPv4. . . . . . . . . . : (ninguna)\n\n"],["p","C:\\Users\\alumno>"],["in","ipconfig /renew\n"]]},
+ {ph:2, title:"DHCPDISCOVER desde Windows", hl:["W"],
+  pkts:[{f:"W", t:"*", ty:"disc", proc:"S"}],
+  text:`El cliente Windows envía su <b>DHCPDISCOVER</b> en broadcast, como cualquier otro cliente. Dentro va su MAC: <code>08:00:27:3b:5e:91</code>.`,
+  ws:[dhcp("disc",{sm:MAC.W, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:XW, ch:MAC.W, op:[["Opción 61 · Identificador de cliente",MAC.W],["Opción 12 · Nombre de host","windows10"],PRL]})]},
+ {ph:2, title:"El servidor reconoce la MAC", hl:["S"],
+  pkts:[{f:"S", t:"*", ty:"offer", proc:"W"}],
+  text:`El servidor compara la MAC con sus bloques <code>host</code> y <b>la encuentra</b>. En lugar de dar la primera IP libre del rango, ofrece la <b>reservada</b>: <code>192.168.1.150</code>.<br><br>Fíjate en que esta oferta va en <b>broadcast</b>: Windows activa en el Discover un indicador para pedir que las respuestas le lleguen así.`,
+  ws:[dhcp("offer",{sm:MAC.S, dm:BC, si:"192.168.1.2", di:"255.255.255.255", sp:67, dp:68, x:XW, yi:"192.168.1.150", ch:MAC.W, op:OPTS()})],
+  pool:{150:"offered"}},
+ {ph:2, title:"DHCPREQUEST", hl:["W"],
+  pkts:[{f:"W", t:"*", ty:"req", proc:"S"}],
+  text:`Windows acepta la oferta con un <b>DHCPREQUEST</b> en broadcast, pidiendo la <code>192.168.1.150</code>.`,
+  ws:[dhcp("req",{sm:MAC.W, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:XW, ch:MAC.W, op:[["Opción 50 · IP solicitada","192.168.1.150",1],["Opción 54 · Servidor DHCP","192.168.1.2",1],PRL]})]},
+ {ph:2, title:"DHCPACK", hl:["S"],
+  pkts:[{f:"S", t:"*", ty:"ack", proc:"W"}],
+  text:`El servidor confirma con un <b>DHCPACK</b>. El cliente comprueba con ARP que la IP está libre y se configura.`,
+  tip:`Curiosidad: las IP de los bloques <code>host</code> con <code>fixed-address</code> <b>no se anotan</b> en <code>dhcpd.leases</code>, porque no son préstamos del rango sino asignaciones fijas.`,
+  ws:[dhcp("ack",{sm:MAC.S, dm:BC, si:"192.168.1.2", di:"255.255.255.255", sp:67, dp:68, x:XW, yi:"192.168.1.150", ch:MAC.W, op:OPTS()})],
+  pool:{150:"fixed"}, ips:{W:"192.168.1.150"}},
+ {ph:3, title:"Siempre la misma IP", hl:["W"],
+  text:`Windows ya tiene la <code>192.168.1.150</code>. Cada vez que se conecte recibirá <b>esta misma IP</b>, mientras su MAC no cambie.<br><br>Se combinan las ventajas de la IP fija (dirección conocida) y de DHCP (toda la configuración se gestiona en un único sitio, el servidor).`,
+  tip:`Al mismo tiempo, el resto de equipos sigue recibiendo IP dinámicas del rango <code>.101 – .200</code>. Lo ideal es que la IP reservada quede <b>fuera</b> del rango dinámico, para que no se pueda dar a otro equipo.`,
+  term:[["","\nAdaptador de Ethernet Ethernet:\n\n   Sufijo DNS específico para la conexión. . : noentiendo.com\n"],["ok","   Dirección IPv4. . . . . . . . . . . . . . : 192.168.1.150\n"],["","   Máscara de subred . . . . . . . . . . . . : 255.255.255.0\n   Puerta de enlace predeterminada . . . . . : 192.168.1.1\n\n"],["p","C:\\Users\\alumno>"]]}
+]},
+
+apipa:{label:"④ Sin servidor (APIPA)", phases:["Sin respuesta","APIPA","Recuperación"],
+  termTitle:"Símbolo del sistema · Windows 10", win:true,
+  start:{ips:{A:"192.168.1.101",W:"0.0.0.0"}, off:{S:true}, pool:{101:"leased"}, leases:LEASE_A("10:00:00","10:10:00")},
+  steps:[
+ {ph:0, title:"El servidor DHCP está apagado", hl:["S","W"],
+  text:`El servicio DHCP está <b>detenido</b> (<code>sudo systemctl stop isc-dhcp-server</code>) y el cliente Windows se conecta a la red sin IP.<br><br>¿Qué hará cuando nadie conteste a sus peticiones?`,
+  term:[["p","C:\\Users\\alumno>"],["in","ipconfig /renew\n"]]},
+ {ph:1, title:"DHCPDISCOVER… sin respuesta", hl:["W"],
+  pkts:[{f:"W", t:"*", ty:"disc", proc:null, lost:true}],
+  text:`Windows envía un <b>DHCPDISCOVER</b> en broadcast. Los demás equipos lo ignoran y el servidor está apagado: <b>nadie responde</b>.`,
+  ws:[dhcp("disc",{sm:MAC.W, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:XP, ch:MAC.W, op:[PRL]})]},
+ {ph:1, title:"Reintentos: 2, 4, 8 y 16 segundos", hl:["W"],
+  pkts:[2,4,8,16].map(() => ({f:"W", t:"*", ty:"disc", proc:null, lost:true, fast:1})),
+  text:`El cliente <b>no se rinde</b>: repite el Discover a los <b>2, 4, 8 y 16 segundos</b> (más un pequeño tiempo aleatorio, para que no coincidan todos los equipos a la vez).<br><br>Mira cómo se acumulan los Discover en Wireshark, todos con el mismo ID de transacción.`,
+  ws:[2,4,8,16].map(() => dhcp("disc",{sm:MAC.W, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:XP, ch:MAC.W, op:[PRL]}))},
+ {ph:2, title:"IP APIPA: 169.254.x.x", hl:["W"],
+  text:`Tras agotar los reintentos, Windows se asigna a sí mismo una <b>IP APIPA</b> (<i>Automatic Private IP Addressing</i>) del rango <code>169.254.0.0/16</code>, elegida al azar: <code>169.254.37.112</code>.<br><br>Con ella solo puede hablar con otros equipos APIPA del mismo segmento: <b>no tiene puerta de enlace ni DNS</b>, así que no puede salir de la red.`,
+  tip:`Truco de diagnóstico: si un equipo tiene una IP <b>169.254.x.x</b>, es que <b>no ha podido contactar con el servidor DHCP</b>. Revisa el cable, el servicio o la configuración de red.`, warn:1,
+  term:[["er","Error al renovar la interfaz Ethernet: no se puede establecer contacto\ncon el servidor DHCP. Se agotó el tiempo de espera de la solicitud.\n\n"],["p","C:\\Users\\alumno>"],["in","ipconfig\n"],["","\nAdaptador de Ethernet Ethernet:\n"],["w","   Dirección IPv4 de configuración automática: 169.254.37.112\n"],["","   Máscara de subred . . . . . . . . . . . . : 255.255.0.0\n   Puerta de enlace predeterminada . . . . . : \n\n"],["p","C:\\Users\\alumno>"]],
+  ips:{W:"169.254.37.112"}},
+ {ph:3, title:"El servidor vuelve: ciclo DORA completo", hl:["S","W"],
+  pkts:[{f:"W", t:"*", ty:"disc", proc:"S", fast:1},{f:"S", t:"*", ty:"offer", proc:"W", fast:1},{f:"W", t:"*", ty:"req", proc:"S", fast:1},{f:"S", t:"*", ty:"ack", proc:"W", fast:1}],
+  text:`Se vuelve a arrancar el servicio (<code>sudo systemctl start isc-dhcp-server</code>).<br><br>Mientras tiene la IP APIPA, Windows sigue enviando un Discover <b>cada 5 minutos</b>. En cuanto el servidor contesta, se completa el ciclo <b>DORA</b> y el cliente recibe la primera IP libre del rango: <code>192.168.1.102</code>.${DORA_SUM}`,
+  term:[["cm","\nREM (en el servidor: sudo systemctl start isc-dhcp-server)\n"],["p","C:\\Users\\alumno>"],["in","ipconfig\n"],["ok","   Dirección IPv4. . . . . . . . . . . . . . : 192.168.1.102\n"],["","   Puerta de enlace predeterminada . . . . . : 192.168.1.1\n\n"],["p","C:\\Users\\alumno>"]],
+  ws:[dhcp("disc",{sm:MAC.W, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:"0x0bd3f17e", ch:MAC.W, op:[PRL]}),
+      dhcp("offer",{sm:MAC.S, dm:BC, si:"192.168.1.2", di:"255.255.255.255", sp:67, dp:68, x:"0x0bd3f17e", yi:"192.168.1.102", ch:MAC.W, op:OPTS()}),
+      dhcp("req",{sm:MAC.W, dm:BC, si:"0.0.0.0", di:"255.255.255.255", sp:68, dp:67, x:"0x0bd3f17e", ch:MAC.W, op:[["Opción 50 · IP solicitada","192.168.1.102",1],["Opción 54 · Servidor DHCP","192.168.1.2",1]]}),
+      dhcp("ack",{sm:MAC.S, dm:BC, si:"192.168.1.2", di:"255.255.255.255", sp:67, dp:68, x:"0x0bd3f17e", yi:"192.168.1.102", ch:MAC.W, op:OPTS()})],
+  off:{S:false}, ips:{W:"192.168.1.102"}, pool:{102:"leased"},
+  leases:LEASE_A("10:00:00","10:10:00")+`
+lease 192.168.1.102 {
+  starts 6 2026/10/18 10:21:37;
+  ends 6 2026/10/18 10:31:37;
+  binding state active;
+  hardware ethernet 08:00:27:3b:5e:91;
+  client-hostname "windows10";
+}`}
+]}
+};
+
+/* ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+let scen = SCEN.dora, STEPS = scen.steps, cur = 0, token = 0, playing = false, playTimer = null, selRow = null;
+const speed = () => parseFloat($("speed").value);
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const NODES = ["A","S","R","W"];
+const BUB = {A:[140,176], S:[860,176], R:[700,70], W:[660,400]};
+
+$("mode").innerHTML = Object.entries(SCEN).map(([k,s]) => `<button data-m="${k}">${s.label}</button>`).join('');
+for(let n=101;n<=200;n++) $("pool").insertAdjacentHTML("beforeend", `<div class="cell" id="c${n}" title="192.168.1.${n}">.${n}</div>`);
+
+function setScen(k){
+  scen = SCEN[k]; STEPS = scen.steps; selRow = null;
+  document.querySelectorAll("#mode button").forEach(b => b.classList.toggle("on", b.dataset.m === k));
+  $("phases").innerHTML = scen.phases.map((p,i)=>`<div class="phase" data-p="${i+1}"><b>${i+1}</b>${p}</div>`).join('');
+  $("termTitle").textContent = scen.termTitle;
+  $("termBox").classList.toggle("win", scen.win);
+}
+
+function stateAt(i){
+  const st = {ips:{A:"0.0.0.0",S:"192.168.1.2",R:"192.168.1.1",W:"192.168.1.120"}, off:{}, pool:{}, lease:null, leases:"", term:[], ws:[]};
+  const s0 = scen.start || {};
+  Object.assign(st.ips, s0.ips||{}); Object.assign(st.off, s0.off||{}); Object.assign(st.pool, s0.pool||{});
+  if(s0.lease) st.lease = s0.lease; if(s0.leases) st.leases = s0.leases;
+  STEPS.slice(0, i+1).forEach((s, si) => {
+    const isNew = si === i;
+    Object.assign(st.ips, s.ips||{}); Object.assign(st.off, s.off||{});
+    Object.entries(s.pool||{}).forEach(([n,v]) => st.pool[n] = v);
+    if("lease" in s) st.lease = s.lease;
+    if(s.leases !== undefined) st.leases = s.leases;
+    (s.term||[]).forEach(t => st.term.push([...t, isNew]));
+    (s.ws||[]).forEach(r => st.ws.push({...r, isNew}));
+  });
+  return st;
+}
+
+function paintNodes(st, prev){
+  NODES.forEach(n => {
+    const ipEl = $("ip"+n), node = $("n"+n);
+    ipEl.textContent = n === "S" && st.off.S ? "⏻ apagado" : st.ips[n];
+    if(n === "S") $("subS").textContent = st.off.S ? "servicio detenido" : "isc-dhcp-server";
+    node.classList.toggle("off", !!st.off[n]);
+    if(prev && prev.ips[n] !== st.ips[n]){ node.classList.remove("newip"); void node.getBBox(); node.classList.add("newip"); }
+  });
+}
+
+function paintPool(st, prev){
+  for(let n=101;n<=200;n++){
+    const c = $("c"+n), v = st.pool[n] && st.pool[n] !== "free" ? st.pool[n] : "";
+    const changed = prev && (prev.pool[n]||"") !== (st.pool[n]||"");
+    c.className = "cell " + v + (changed ? " new" : "");
+  }
+  $("leases").textContent = st.leases || "# /var/lib/dhcp/dhcpd.leases\n# (sin concesiones)";
+  if(st.leases) $("leases").textContent = "# /var/lib/dhcp/dhcpd.leases\n" + st.leases;
+}
+
+function paintLease(st){
+  const L = st.lease;
+  $("lease").classList.toggle("on", !!L);
+  if(!L) return;
+  $("leaseIp").textContent = L.ip;
+  $("leaseT").textContent = L.t;
+  $("leaseFill").style.width = (L.pos*100) + "%";
+}
+
+function paintWs(st){
+  if(!st.ws.length){ $("wsList").innerHTML = `<div class="empty">Capturando… aún no hay paquetes.</div>`; $("wsDet").innerHTML = `<div class="hint">Aquí verás los campos del paquete seleccionado.</div>`; return; }
+  const sel = selRow !== null && selRow < st.ws.length ? selRow : st.ws.length - 1;
+  $("wsList").innerHTML = `<table><tr><th>Nº</th><th>Origen</th><th>Destino</th><th>Prot.</th><th>Información</th></tr>` +
+    st.ws.map((r,k) => `<tr data-k="${k}" class="${r.isNew?"new":""} ${k===sel?"sel":""}" style="--c:${COLOR[r.ty]}"><td>${k+1}</td><td>${esc(r.src)}</td><td>${esc(r.dst)}</td><td>${r.proto}</td><td>${esc(r.info)}</td></tr>`).join('') + `</table>`;
+  const r = st.ws[sel];
+  $("wsDet").innerHTML = `<div class="hint">Paquete nº ${sel+1} · ${TY[r.ty]}</div>` + r.det.map(([h, f]) =>
+    `<h5>▾ ${h}</h5>` + f.map(([k,v,hl]) => `<div class="${hl?"hl":""}"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')).join('');
+  if(selRow === null) $("wsList").scrollTop = 1e6;
+  $("wsList").querySelectorAll("tr[data-k]").forEach(tr => tr.onclick = () => { selRow = +tr.dataset.k; paintWs(stateAt(cur)); });
+}
+
+function render(i, animate=true){
+  const prev = i > 0 ? stateAt(i-1) : null;
+  cur = i; token++; selRow = null;
+  const step = STEPS[i], st = stateAt(i);
+  $("pktLayer").innerHTML = ""; $("fxLayer").innerHTML = "";
+  NODES.forEach(n => $("n"+n).classList.toggle("hl", (step.hl||[]).includes(n)));
+  ["lA","lS","lR","lW"].forEach(l => $(l).classList.remove("on"));
+
+  document.querySelectorAll(".phase").forEach(el => {
+    const p = +el.dataset.p;
+    el.className = "phase " + (p < step.ph ? "done" : p === step.ph ? "active" : "");
+  });
+
+  const ex = $("explain");
+  ex.classList.remove("fade"); void ex.offsetWidth; ex.classList.add("fade");
+  ex.innerHTML = `<h3>📖 Explicación</h3>
+    <span class="badge">${step.ph ? "Fase " + step.ph + " · " + scen.phases[step.ph-1] : "Introducción"}</span>
+    <h2>${step.title}</h2>
+    <div class="txt">${step.text}</div>
+    ${step.tip ? `<div class="tip ${step.warn?"warn":""}">💡 ${step.tip}</div>` : ""}`;
+
+  $("term").innerHTML = st.term.map(([c,t,isNew]) => `<span class="${c} ${isNew?"nl":""}">${esc(t)}</span>`).join('') + '<span class="cursor"></span>';
+  $("term").scrollTop = 1e6;
+  paintWs(st);
+
+  $("counter").textContent = `${i+1} / ${STEPS.length}`;
+  $("bar").style.width = ((i+1)/STEPS.length*100) + "%";
+  $("prev").disabled = i === 0;
+  $("next").disabled = i === STEPS.length-1;
+
+  // Lo que cambia en los equipos se muestra cuando llegan los paquetes
+  const before = prev || stateAt(-1);
+  const anim = animate && step.pkts;
+  // El servidor se enciende antes de enviar paquetes (escenario APIPA)
+  const pre = anim ? {...before, off:{...before.off, ...(step.off && step.off.S === false ? {S:false} : {})}} : st;
+  paintNodes(pre, null); paintPool(anim ? before : st, prev); paintLease(anim ? before : st);
+
+  const tk = token;
+  (anim ? runPackets(step.pkts, tk) : Promise.resolve()).then(() => {
+    if(tk !== token) return;
+    if(anim){ paintNodes(st, before); paintPool(st, before); paintLease(st); }
+    scheduleNext(step);
+  });
+}
+
+/* ---------- Animación ---------- */
+function makePkt(label, kind){
+  const g = document.createElementNS(NS,"g");
+  g.setAttribute("class","pkt "+kind);
+  const r = document.createElementNS(NS,"rect"), t = document.createElementNS(NS,"text");
+  t.textContent = label; t.setAttribute("y","4.5");
+  g.append(r,t); $("pktLayer").appendChild(g);
+  const w = t.getBBox().width + 20;
+  r.setAttribute("x",-w/2); r.setAttribute("y",-13); r.setAttribute("width",w); r.setAttribute("height",26); r.setAttribute("rx",13);
+  g.setAttribute("transform","translate(-200 -200)");
+  return g;
+}
+function move(path, rev, g, dur, tk){
+  return new Promise(res => {
+    const L = path.getTotalLength(), t0 = performance.now();
+    function f(now){
+      if(tk !== token){ g.remove(); return res(false); }
+      const p = Math.min(1, (now - t0) / dur);
+      const e = p < .5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;
+      const pt = path.getPointAtLength((rev ? 1-e : e) * L);
+      g.setAttribute("transform",`translate(${pt.x} ${pt.y})`);
+      if(p < 1) requestAnimationFrame(f); else res(true);
+    }
+    requestAnimationFrame(f);
+  });
+}
+function bubble(n, txt, cls){
+  const t = document.createElementNS(NS,"text");
+  t.setAttribute("x", BUB[n][0]); t.setAttribute("y", BUB[n][1]);
+  t.setAttribute("class","bubble "+cls); t.textContent = txt;
+  $("fxLayer").appendChild(t);
+  setTimeout(() => t.remove(), 1900);
+}
+function pulse(n){ const b=$("n"+n); b.classList.remove("pulse"); void b.getBBox(); b.classList.add("pulse"); }
+const wait = (ms, tk) => new Promise(r => setTimeout(() => r(tk === token), ms));
+
+async function runPackets(list, tk){
+  for(const p of list){
+    const bc = p.t === "*";
+    const label = (bc ? "📢 " : "") + (p.ty === "arp" ? "ARP ¿.101?" : TY[p.ty]);
+    const leg = (p.fast ? 520 : 850) / speed();
+    // Tramo 1: origen → switch
+    $("l"+p.f).classList.add("on");
+    let g = makePkt(label, p.ty);
+    if(!await move($("l"+p.f), false, g, leg, tk)) return;
+    g.remove(); $("l"+p.f).classList.remove("on");
+    // Tramo 2: switch → destino(s)
+    const dests = bc ? NODES.filter(n => n !== p.f) : [p.t];
+    dests.forEach(n => $("l"+n).classList.add("on"));
+    const res = await Promise.all(dests.map(n => { const gg = makePkt(label, p.ty); return move($("l"+n), true, gg, leg, tk).then(ok => (gg.remove(), ok)); }));
+    dests.forEach(n => $("l"+n).classList.remove("on"));
+    if(!res.every(Boolean)) return;
+    dests.forEach(n => {
+      const isTarget = bc ? n === p.proc : true;
+      if($("n"+n).classList.contains("off")) bubble(n, "✖ apagado", "bad");
+      else if(isTarget && !p.lost){ pulse(n); bubble(n, "✔ Lo procesa", "yes"); }
+      else if(p.lost && !bc) bubble(n, "✖ Sin respuesta", "bad");
+      else bubble(n, p.no || (n === "S" && p.lost ? "✖ Sin respuesta" : "Lo ignora"), "no");
+    });
+    if(!await wait((p.fast ? 500 : 900) / speed(), tk)) return;
+  }
+}
+
+function scheduleNext(step){
+  clearTimeout(playTimer);
+  if(!playing) return;
+  if(cur >= STEPS.length-1){ setPlaying(false); return; }
+  const words = (step.text + (step.tip||"")).replace(/<[^>]+>/g,"").split(/\s+/).length;
+  const tk = token;
+  playTimer = setTimeout(() => { if(tk === token && playing) render(cur+1); }, (2500 + words*140) / speed());
+}
+function setPlaying(v){
+  playing = v;
+  $("play").textContent = v ? "⏸ Pausa" : "⏵ Auto";
+  $("play").classList.toggle("playing", v);
+  clearTimeout(playTimer);
+  if(v){ if(cur >= STEPS.length-1) render(0); else render(cur+1); }
+}
+
+$("next").onclick = () => { if(cur < STEPS.length-1) render(cur+1); };
+$("prev").onclick = () => { if(cur > 0) render(cur-1); };
+$("reset").onclick = () => { setPlaying(false); render(0); };
+$("play").onclick = () => setPlaying(!playing);
+$("speed").oninput = () => $("speedv").textContent = speed() + "x";
+document.querySelectorAll("#mode button").forEach(b => b.onclick = () => {
+  if(scen === SCEN[b.dataset.m]) return;
+  setPlaying(false); setScen(b.dataset.m); render(0);
+});
+document.addEventListener("keydown", e => {
+  if(e.target.tagName === "INPUT") return;
+  if(e.key === "ArrowRight" || e.key === " "){ e.preventDefault(); $("next").click(); }
+  if(e.key === "ArrowLeft"){ e.preventDefault(); $("prev").click(); }
+});
+
+setScen("dora");
+render(0);
+</script>
+</body>
+</html>
