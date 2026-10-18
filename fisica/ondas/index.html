@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ondas que viajan · Simulador de comunicaciones inalámbricas</title>
+<style>
+  :root{
+    --bg:#070b1a; --panel:#0e1530; --panel2:#131c3d; --line:#233062;
+    --text:#e8ecff; --muted:#8e98c6;
+    --app:#a78bfa; --cod:#22d3ee; --enl:#34d399; --fis:#f59e0b; --air:#f472b6;
+    --ok:#4ade80; --bad:#f87171;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:radial-gradient(ellipse 120% 70% at 50% -10%,#18225a 0%,#0a1030 45%,#070b1a 75%) fixed;
+    color:var(--text);
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:15px; line-height:1.5;
+    padding:18px clamp(12px,2.5vw,32px) 28px;
+    max-width:1500px; margin:0 auto;
+  }
+  .panel{
+    background:linear-gradient(180deg,rgba(22,31,68,.85),rgba(12,18,42,.9));
+    border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 10px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  /* ---------- cabecera ---------- */
+  .top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+  .brand{display:flex;align-items:center;gap:14px}
+  .logo{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;
+    background:conic-gradient(from 200deg,var(--app),var(--cod),var(--enl),var(--fis),var(--air),var(--app));
+    box-shadow:0 0 24px rgba(34,211,238,.35)}
+  .logo svg{width:34px;height:34px}
+  h1{margin:0;font-size:clamp(20px,2.4vw,28px);letter-spacing:.3px;
+    background:linear-gradient(90deg,#fff,#b9c6ff 60%,#f9a8d4);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand p{margin:0;color:var(--muted);font-size:14px}
+  .playback{display:flex;gap:8px;flex-wrap:wrap}
+  button{
+    font:inherit;color:var(--text);cursor:pointer;
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:8px 14px;transition:.15s;
+  }
+  button:hover{border-color:#4459a8;background:#1a2550;transform:translateY(-1px)}
+  button.primary{background:linear-gradient(135deg,#6d5dfc,#22b8d6);border-color:transparent;font-weight:600}
+  button.primary:hover{filter:brightness(1.12)}
+  button.warn{background:linear-gradient(135deg,#f97316,#ef4444);border-color:transparent;font-weight:600}
+
+  /* ---------- controles ---------- */
+  .controls{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 18px;padding:14px 18px;margin-bottom:14px}
+  .ctl.msg{grid-column:span 2}
+  .seg{display:flex;background:#0a1029;border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+  .seg button{flex:1;padding:6px 8px;border:0;border-radius:8px;background:transparent;font-size:13.5px;white-space:nowrap}
+  .seg button:hover{transform:none;background:#18224a}
+  .seg button.on{background:linear-gradient(135deg,#6d5dfc,#22b8d6);font-weight:600}
+  .ctl .chk{display:inline-flex;justify-content:flex-start;align-items:center;gap:6px;cursor:pointer;color:var(--text);text-transform:none;letter-spacing:0;font-size:12.5px;margin:0}
+  .chk input{accent-color:var(--cod);width:15px;height:15px;margin:0}
+  .speed{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:4px 12px;font-size:13px;color:var(--muted)}
+  .speed input{width:90px;margin:0}
+  .speed b{color:var(--text);min-width:38px}
+  .ctl label{display:flex;justify-content:space-between;font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:6px}
+  .ctl label b{color:var(--text);font-weight:600;text-transform:none;letter-spacing:0}
+  .ctl .row{display:flex;gap:8px}
+  input[type=text],select{
+    width:100%;font:inherit;color:var(--text);background:#0a1029;border:1px solid var(--line);
+    border-radius:10px;padding:8px 10px;outline:none;
+  }
+  input[type=text]:focus,select:focus{border-color:var(--cod);box-shadow:0 0 0 3px rgba(34,211,238,.15)}
+  input[type=range]{width:100%;accent-color:var(--cod);margin-top:8px}
+  .hint{font-size:12px;color:var(--muted);margin-top:4px;min-height:18px}
+
+  /* ---------- pasos ---------- */
+  .stepper{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:14px;position:relative}
+  .step{
+    display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 8px;
+    border-radius:12px;background:rgba(14,21,48,.7);border:1px solid var(--line);
+    cursor:pointer;transition:.2s;position:relative;overflow:hidden;text-align:center;
+  }
+  .step .num{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;
+    border:2px solid var(--c);color:var(--c);background:rgba(0,0,0,.25);transition:.2s}
+  .step .lbl{font-size:12.5px;font-weight:600}
+  .step .sub{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .step.done .num{background:var(--c);color:#0b1020}
+  .step.active{border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 0 22px -4px var(--c);background:rgba(20,30,66,.95)}
+  .step.active .num{background:var(--c);color:#0b1020;box-shadow:0 0 16px var(--c)}
+  .step .bar{position:absolute;left:0;bottom:0;height:3px;background:var(--c);width:0}
+  .step:hover{transform:translateY(-2px)}
+
+  /* ---------- escena ---------- */
+  .scene-wrap{padding:6px;margin-bottom:14px}
+  #scene{display:block;width:100%;height:390px}
+  .bottom{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+  .detail-wrap{padding:6px}
+  #detail{display:block;width:100%;height:330px}
+
+  /* ---------- explicación ---------- */
+  .explain{padding:18px 22px;display:flex;flex-direction:column;gap:10px;min-height:342px}
+  .pill{align-self:flex-start;font-size:11.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+    padding:4px 10px;border-radius:999px;color:#0b1020;background:var(--c)}
+  .explain h2{margin:0;font-size:21px;color:#fff}
+  .explain .body{color:#d2d8f5}
+  .explain .body ul{margin:6px 0;padding-left:20px}
+  .explain .body li{margin:2px 0}
+  .explain code{background:#0a1029;border:1px solid var(--line);padding:1px 6px;border-radius:6px;font-family:Consolas,"Courier New",monospace;color:#9ee7f5}
+  .key{margin-top:auto;border-left:4px solid var(--c);background:rgba(255,255,255,.04);padding:10px 14px;border-radius:0 10px 10px 0;font-size:14px;color:#dfe4ff}
+  .key b{color:var(--c)}
+  .ok{color:var(--ok)} .bad{color:var(--bad)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+
+  footer{margin-top:16px;color:var(--muted);font-size:12.5px;text-align:center}
+  footer kbd{background:#0a1029;border:1px solid var(--line);border-radius:5px;padding:0 6px;font-family:inherit}
+
+  /* ---------- espectro ---------- */
+  .spectrum{margin-top:14px;padding:16px 18px}
+  .spec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;margin-bottom:10px}
+  .spec-head h3{margin:0;font-size:19px;color:#fff}
+  .spec-head p{margin:0;color:var(--muted);font-size:13.5px}
+  .spec-body{display:grid;grid-template-columns:2.3fr 1fr;gap:16px;align-items:stretch}
+  .spec-body > *, .bottom > *{min-width:0}
+  #spec{display:block;width:100%;height:262px;cursor:crosshair}
+  .spec-info{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;padding:14px 16px;
+    background:rgba(255,255,255,.03);font-size:14px;display:flex;flex-direction:column;gap:8px}
+  .si-top{display:flex;gap:12px;align-items:center}
+  .si-icon{font-size:30px;line-height:1}
+  .si-top h4{margin:0;font-size:17px;color:var(--c)}
+  .si-range{font-size:12px;color:var(--muted);font-family:Consolas,"Courier New",monospace}
+  .spec-info p{margin:0;color:#d2d8f5}
+  .si-props{display:flex;flex-wrap:wrap;gap:6px}
+  .si-props span{font-size:12px;padding:3px 9px;border-radius:999px;background:#0a1029;border:1px solid var(--line)}
+  .si-note{margin-top:auto;font-size:13px;color:var(--c);font-weight:600}
+
+  @media (max-width:1100px){
+    .spec-body{grid-template-columns:1fr}
+    .controls{grid-template-columns:repeat(2,1fr)}
+    .bottom{grid-template-columns:1fr}
+  }
+  @media (max-width:700px){
+    .controls{grid-template-columns:1fr}
+    .ctl.msg{grid-column:auto}
+    .stepper{grid-template-columns:repeat(4,1fr)}
+    #scene{height:330px}
+    .step .sub{display:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 40 40" fill="none" stroke="#0b1020" stroke-width="3" stroke-linecap="round">
+        <circle cx="20" cy="26" r="3" fill="#0b1020"/>
+        <path d="M13 19a10 10 0 0 1 14 0"/><path d="M8 14a17 17 0 0 1 24 0"/><path d="M3 9a24 24 0 0 1 34 0" opacity=".7"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Ondas que viajan</h1>
+      <p>Cómo viaja un mensaje por el aire de un dispositivo a otro, capa a capa</p>
+    </div>
+  </div>
+  <div class="playback">
+    <button id="prev" title="Paso anterior (←)">⏮ Anterior</button>
+    <button id="play" class="primary" title="Reproducir / pausa (espacio)">▶ Reproducir</button>
+    <button id="next" title="Paso siguiente (→)">Siguiente ⏭</button>
+    <button id="reset" title="Volver al principio">↺ Reiniciar</button>
+    <label class="speed" title="Velocidad de la animación">Velocidad <input type="range" id="speed" min="0.5" max="2.5" step="0.25" value="1"><b id="speedV">1×</b></label>
+  </div>
+</header>
+
+<section class="panel controls">
+  <div class="ctl msg">
+    <label>Mensaje a enviar <b id="msgInfo"></b></label>
+    <div class="row">
+      <input type="text" id="msg" maxlength="12" value="Hola" autocomplete="off" spellcheck="false">
+      <button id="send" class="primary">Enviar ➤</button>
+    </div>
+  </div>
+  <div class="ctl">
+    <label>Escenario</label>
+    <div class="seg" id="sceneSel">
+      <button data-v="land" class="on">🏠 Terrestre</button>
+      <button data-v="sat">🛰️ Satélite</button>
+    </div>
+    <div class="hint" id="sceneHint"></div>
+  </div>
+  <div class="ctl">
+    <label>Antenas</label>
+    <div class="seg" id="antSel">
+      <button data-v="omni" class="on">⊙ Omnidireccional</button>
+      <button data-v="dish">◗ Parabólica</button>
+    </div>
+    <div class="hint" id="antHint"></div>
+  </div>
+  <div class="ctl">
+    <label>Modulación</label>
+    <select id="mod">
+      <option value="ASK">ASK · amplitud</option>
+      <option value="FSK">FSK · frecuencia</option>
+      <option value="PSK">PSK · fase</option>
+    </select>
+    <div class="hint" id="modHint"></div>
+  </div>
+  <div class="ctl">
+    <label>Frecuencia</label>
+    <select id="freq"></select>
+    <div class="hint" id="freqHint"></div>
+  </div>
+  <div class="ctl">
+    <label><span id="distL">Distancia</span> <b id="distV">20 m</b></label>
+    <input type="range" id="dist" min="1" max="100" value="20">
+    <div class="hint" id="distHint"></div>
+  </div>
+  <div class="ctl">
+    <label>Ruido / interferencias <b id="noiseV">20 %</b></label>
+    <input type="range" id="noise" min="0" max="100" value="20">
+  </div>
+</section>
+
+<nav class="stepper" id="stepper"></nav>
+
+<section class="panel scene-wrap"><canvas id="scene"></canvas></section>
+
+<section class="bottom">
+  <div class="panel detail-wrap"><canvas id="detail"></canvas></div>
+  <article class="panel explain" id="explain"></article>
+</section>
+
+<section class="panel spectrum">
+  <div class="spec-head">
+    <h3>🌈 Espectro electromagnético</h3>
+    <p>Todas estas ondas son el mismo fenómeno y viajan a la velocidad de la luz: solo cambia la frecuencia. Pasa el ratón (o toca) por cada zona.</p>
+  </div>
+  <div class="spec-body">
+    <canvas id="spec"></canvas>
+    <div class="spec-info" id="specInfo"></div>
+  </div>
+</section>
+
+<footer>
+  Atajos: <kbd>←</kbd> <kbd>→</kbd> cambiar de paso · <kbd>Espacio</kbd> reproducir/pausa · Haz clic en cualquier paso para saltar a él.
+  <br>Modelo simplificado con fines didácticos: las tramas y modulaciones reales (Wi-Fi, 4G, 5G) son bastante más complejas.
+</footer>
+
+<script>
+"use strict";
+/* =====================================================================
+   DATOS DE CONFIGURACIÓN
+   ===================================================================== */
+const LAYERS = [
+  {name:'Aplicación',      color:'#a78bfa', icon:'💬'},
+  {name:'Codificación',    color:'#22d3ee', icon:'🔢'},
+  {name:'Enlace de datos', color:'#34d399', icon:'📦'},
+  {name:'Física (radio)',  color:'#f59e0b', icon:'📡'},
+];
+const AIR = '#f472b6';
+const STAGES = [
+  {side:'tx', layer:0, name:'Mensaje',      sub:'Aplicación'},
+  {side:'tx', layer:1, name:'Codificación', sub:'Texto → bits'},
+  {side:'tx', layer:2, name:'Trama',        sub:'Enlace'},
+  {side:'tx', layer:3, name:'Modulación',   sub:'Bits → onda'},
+  {side:'air',layer:4, name:'Propagación',  sub:'Por el medio'},
+  {side:'rx', layer:3, name:'Demodulación', sub:'Onda → bits'},
+  {side:'rx', layer:2, name:'Verificación', sub:'Enlace'},
+  {side:'rx', layer:0, name:'Entrega',      sub:'Bits → texto'},
+];
+const stageColor = i => STAGES[i].layer === 4 ? AIR : LAYERS[STAGES[i].layer].color;
+const DUR = [6, 9, 9, 11, 9, 11, 9, 9];          // segundos por paso (a velocidad 1×)
+// obs: dB que se pierden por cada 10 m de paredes/obstáculos · atm/rain: dB de atmósfera y lluvia (satélite)
+const FREQS = [
+  {ghz:0.027, label:'27 MHz',  name:'27 MHz · onda corta',        obs:0.3, vis:64, atm:0,   rain:0,  hint:'Muy pocos datos · rebota en la ionosfera'},
+  {ghz:0.9,   label:'900 MHz', name:'900 MHz · móvil',            obs:0.8, vis:44, atm:0,   rain:0,  hint:'Llega lejos, menos velocidad'},
+  {ghz:2.4,   label:'2,4 GHz', name:'2,4 GHz · Wi-Fi / Bluetooth',obs:1.5, vis:30, atm:0,   rain:0,  hint:'Equilibrio alcance/velocidad'},
+  {ghz:5.0,   label:'5 GHz',   name:'5 GHz · Wi-Fi',              obs:2.2, vis:21, atm:0.1, rain:1,  hint:'Más rápida, menos alcance'},
+  {ghz:12,    label:'12 GHz',  name:'12 GHz · banda Ku (TV sat.)',obs:4,   vis:14, atm:0.5, rain:8,  hint:'TV por satélite · le afecta la lluvia'},
+  {ghz:20,    label:'20 GHz',  name:'20 GHz · banda Ka (internet)',obs:6,  vis:10, atm:1,   rain:20, hint:'Internet por satélite · la lluvia la atenúa mucho'},
+];
+const DISH_D = 0.6;            // diámetro de las antenas parabólicas (m)
+const MODS = {
+  ASK:{name:'ASK (amplitud)',  hint:'1 = onda alta · 0 = onda baja'},
+  FSK:{name:'FSK (frecuencia)',hint:'1 = ondas juntas · 0 = separadas'},
+  PSK:{name:'PSK (fase)',      hint:'0 = la onda se invierte'},
+};
+const SPB = 48;                // muestras por bit
+const DST = 0xB7, PRE = 0xAA;  // dirección destino y preámbulo
+
+const S = {
+  msg:'Hola', mod:'ASK', freq:2, dist:20, noise:0.20, speed:1, scene:'land', ant:'omni', rain:false,
+  stage:0, t:0, clock:0, playing:false, seed:7, attempt:1, tx:null
+};
+
+/* =====================================================================
+   UTILIDADES
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const hexA = (hex,a) => { const n=parseInt(hex.slice(1),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; };
+const toBin = b => b.toString(2).padStart(8,'0');
+const toHex = b => '0x' + b.toString(16).toUpperCase().padStart(2,'0');
+const fmt = (n,d=1) => n.toLocaleString('es-ES',{maximumFractionDigits:d});
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function rr(ctx,x,y,w,h,r){ctx.beginPath();if(w<=0||h<=0)return;r=Math.max(0,Math.min(r,w/2,h/2));ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function setupCanvas(c){
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w*dpr) || c.height !== Math.round(h*dpr)) { c.width = Math.round(w*dpr); c.height = Math.round(h*dpr); }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  return {ctx,w,h};
+}
+function txt(ctx,s,x,y,{size=13,color='#e8ecff',align='left',base='middle',weight=400,font='"Segoe UI",system-ui,sans-serif'}={}){
+  ctx.font=`${weight} ${size}px ${font}`; ctx.fillStyle=color; ctx.textAlign=align; ctx.textBaseline=base; ctx.fillText(s,x,y);
+}
+const MONO = 'Consolas,"Courier New",monospace';
+const ease = x => x<0?0:x>1?1:x*x*(3-2*x);
+const isSat = () => S.scene === 'sat';
+const distTxt = () => isSat() ? `${fmt(S.dist,0)} km` : `${S.dist} m`;
+const lamTxt = ghz => { const cm = 30/ghz; return cm >= 100 ? `${fmt(cm/100)} m` : `${fmt(cm)} cm`; };
+const freqWords = ghz => ghz >= 1 ? `${fmt(ghz)} mil millones` : `${fmt(ghz*1000)} millones`;
+function timeTxt(sec){
+  if (sec < 1e-6) return `${fmt(sec*1e9)} ns`;
+  if (sec < 1e-3) return `${fmt(sec*1e6)} µs`;
+  return `${fmt(sec*1e3)} ms`;
+}
+const devName = side => side === 'tx' ? (isSat() ? 'Estación terrestre' : 'Móvil') : (isSat() ? 'Satélite' : 'Portátil');
+const wallCount = () => isSat() ? 0 : Math.min(4, Math.floor(S.dist/20));
+
+/* =====================================================================
+   BALANCE DEL ENLACE (en decibelios)
+   potencia recibida = potencia emitida + ganancia antenas − pérdidas
+   ===================================================================== */
+function linkBudget(){
+  const F = FREQS[S.freq], sat = isSat();
+  const dKm = sat ? S.dist : S.dist/1000;
+  const fspl = 20*Math.log10(dKm) + 20*Math.log10(F.ghz*1000) + 32.44;   // pérdida en espacio libre
+  const lam = 0.3 / F.ghz;
+  const dish = Math.max(2, 10*Math.log10(0.6*(Math.PI*DISH_D/lam)**2));  // ganancia de un plato de 60 cm
+  const g = S.ant === 'dish' ? dish : 2;                                   // dBi por antena
+  const obst = sat ? 0 : (S.dist/10)*F.obs;                                // paredes y obstáculos
+  const atm = sat ? F.atm + (S.rain ? F.rain : 0) : 0;                     // atmósfera y lluvia
+  const pt = sat ? 50 : 20;                                                // dBm (100 W / 100 mW)
+  const sens = sat ? -110 : -80;                                           // sensibilidad del receptor
+  const pr = pt + 2*g - fspl - obst - atm;
+  const margin = pr - sens;
+  const blocked = sat && F.ghz < 0.03;                                     // la ionosfera la refleja
+  const a = blocked ? 0 : clamp((margin + 5)/45, 0.02, 1);                 // nivel de señal 0‥1
+  return {fspl, g, dish, obst, atm, pt, pr, margin, a, blocked, dKm, secs: dKm/300000};
+}
+
+/* =====================================================================
+   SIMULACIÓN: codificación, trama, modulación, canal y demodulación
+   ===================================================================== */
+function carrier(bit, k){
+  const ph = 2*Math.PI*k/SPB;
+  if (S.mod === 'ASK') return (bit ? 1 : 0.2) * Math.sin(3*ph);
+  if (S.mod === 'FSK') return Math.sin((bit ? 4 : 2)*ph);
+  return Math.sin(3*ph + (bit ? 0 : Math.PI));      // PSK
+}
+function compute(){
+  const enc = new TextEncoder();
+  const chars = Array.from(S.msg).map(ch => ({ch, cp:ch.codePointAt(0), bytes:Array.from(enc.encode(ch))}));
+  const data = chars.flatMap(c => c.bytes);
+  const len = data.length;
+  const ck = (DST + len + data.reduce((a,b)=>a+b,0)) & 255;
+  const fields = [
+    {label:'Preámbulo', short:'Pre.',  bytes:[PRE], color:'#94a3b8'},
+    {label:'Destino',   short:'Dest.', bytes:[DST], color:'#60a5fa'},
+    {label:'Longitud',  short:'Long.', bytes:[len], color:'#c084fc'},
+    {label:'Datos',     short:'Datos', bytes:data,  color:'#34d399'},
+    {label:'Control',   short:'CRC',   bytes:[ck],  color:'#fbbf24'},
+  ];
+  const bytes = fields.flatMap(f => f.bytes);
+  const bits = [], bitField = [];
+  fields.forEach((f,fi) => f.bytes.forEach(b => { for (let i=7;i>=0;i--){ bits.push(b>>i&1); bitField.push(fi); } }));
+
+  // Señal modulada
+  const sig = new Float32Array(bits.length*SPB);
+  bits.forEach((b,i) => { for (let k=0;k<SPB;k++) sig[i*SPB+k] = carrier(b,k); });
+
+  // Canal: atenuación + ruido gaussiano
+  const LB = linkBudget(), a = LB.a, aR = Math.max(a, 0.02);   // aR: lo que el receptor cree recibir (control de ganancia)
+  const sigma = S.noise * 1.25;
+  const rnd = mulberry32(S.seed);
+  const gauss = () => { let u=0,v=0; while(!u) u=rnd(); v=rnd(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+  const rx = sig.map(v => a*v + sigma*gauss());
+
+  // Demodulación (correlación con la portadora)
+  const rxBits = bits.map((_,i) => {
+    const corr = cyc => { let I=0,Q=0; for (let k=0;k<SPB;k++){ const r=rx[i*SPB+k], p=2*Math.PI*cyc*k/SPB; I+=r*Math.sin(p); Q+=r*Math.cos(p);} return [I,Q]; };
+    if (S.mod === 'ASK'){ const [I,Q]=corr(3); return (2/SPB)*Math.hypot(I,Q)/aR > 0.6 ? 1 : 0; }
+    if (S.mod === 'FSK'){ const [I4,Q4]=corr(4), [I2,Q2]=corr(2); return I4*I4+Q4*Q4 > I2*I2+Q2*Q2 ? 1 : 0; }
+    return corr(3)[0] > 0 ? 1 : 0;
+  });
+  const errors = []; rxBits.forEach((b,i) => { if (b !== bits[i]) errors.push(i); });
+  const rxBytes = []; for (let i=0;i<rxBits.length;i+=8){ let v=0; for (let j=0;j<8;j++) v=v<<1|rxBits[i+j]; rxBytes.push(v); }
+  const rxData = rxBytes.slice(3, 3+len), rxCk = rxBytes[3+len];
+  const calcCk = (rxBytes[1] + rxBytes[2] + rxData.reduce((a,b)=>a+b,0)) & 255;
+  const dstOk = rxBytes[1] === DST;
+  const ok = dstOk && calcCk === rxCk;
+  const dec = new TextDecoder('utf-8');
+  let p = 0;
+  const rxChars = chars.map(c => { const bs = rxData.slice(p, p+c.bytes.length); p += c.bytes.length;
+    return {ch: dec.decode(Uint8Array.from(bs)), bytes:bs, bad: bs.some((b,j)=>b!==c.bytes[j])}; });
+  const rxText = rxChars.map(c=>c.ch).join('');
+  S.tx = {chars, data, len, ck, fields, bytes, bits, bitField, sig, rx, a, aR, LB, sigma, rxBits, errors, rxBytes, rxCk, calcCk, dstOk, ok, rxChars, rxText};
+}
+
+/* =====================================================================
+   INTERFAZ: pasos, explicaciones y controles
+   ===================================================================== */
+const stepper = $('#stepper');
+STAGES.forEach((st,i) => {
+  const el = document.createElement('div');
+  el.className = 'step'; el.style.setProperty('--c', stageColor(i));
+  el.innerHTML = `<div class="num">${i+1}</div><div class="lbl">${st.name}</div><div class="sub">${st.sub}</div><div class="bar"></div>`;
+  el.onclick = () => goStage(i);
+  stepper.appendChild(el);
+});
+function updateStepper(){
+  [...stepper.children].forEach((el,i) => {
+    el.classList.toggle('active', i === S.stage);
+    el.classList.toggle('done', i < S.stage);
+    el.querySelector('.bar').style.width = i < S.stage ? '100%' : '0';
+  });
+}
+function goStage(i){
+  S.stage = clamp(i, 0, 7); S.t = 0;
+  updateStepper(); updateExplain();
+}
+function retransmit(){
+  S.seed = (S.seed * 16807 + 11) % 2147483647; S.attempt++;
+  compute(); goStage(4);
+}
+function setPlaying(p){ S.playing = p; $('#play').textContent = p ? '⏸ Pausa' : '▶ Reproducir'; }
+
+function explain(i){
+  const T = S.tx, F = FREQS[S.freq], nb = T.data.length, nChars = T.chars.length;
+  const multi = T.chars.some(c => c.bytes.length > 1);
+  const E = T.errors.length, Edata = T.errors.filter(k => k >= 8).length;
+  const safeMsg = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  switch(i){
+  case 0: return {
+    title:'1. Escribimos un mensaje',
+    body:`Todo empieza en la <b>capa de aplicación</b>: una app (WhatsApp, un navegador, un juego…) recibe el texto <code>${safeMsg(S.msg)}</code> que ha escrito el usuario.
+          <br><br>La aplicación <b>no sabe nada de ondas ni de antenas</b>: simplemente entrega el mensaje a las capas de abajo para que lo hagan llegar al otro dispositivo.`,
+    key:`<b>Idea clave:</b> cada capa hace una sola tarea y confía en las demás. Es como enviar una carta: tú la escribes, pero no conduces el camión de correos.`};
+  case 1: return {
+    title:'2. Del texto a los números (bits)',
+    body:`Los dispositivos digitales solo entienden <b>ceros y unos</b>. Cada carácter se traduce a un número usando una tabla estándar (<b>ASCII / UTF-8</b>), y ese número se escribe en <b>binario</b> con 8 bits (= 1 byte).
+          <br><br>Nuestro mensaje de <b>${nChars} caracteres</b> ocupa <b>${nb} bytes = ${nb*8} bits</b>.
+          ${multi ? '<br>Fíjate: letras como <b>ñ</b> o <b>á</b> necesitan <b>2 bytes</b> en UTF-8.' : ''}`,
+    key:`<b>Idea clave:</b> un <b>bit</b> es la unidad mínima de información: sí/no, encendido/apagado, 1/0.`};
+  case 2: return {
+    title:'3. Empaquetamos los datos en una trama',
+    body:`La <b>capa de enlace</b> mete los bits en un “sobre” llamado <b>trama</b> y le añade información extra:
+          <ul>
+            <li><b>Preámbulo</b> (10101010): avisa de que llega una trama y ayuda al receptor a sincronizarse.</li>
+            <li><b>Destino</b>: la dirección (MAC) del dispositivo que debe recibirla.</li>
+            <li><b>Longitud</b>: cuántos bytes de datos lleva.</li>
+            <li><b>Control de errores</b>: un número calculado con los datos. El receptor lo recalculará para saber si algo se estropeó por el camino.</li>
+          </ul>Total a enviar: <b>${T.bits.length} bits</b>.`,
+    key:`<b>Idea clave:</b> igual que un sobre lleva dirección y remitente, cada trama lleva cabecera + datos + control de errores.`};
+  case 3: {
+    const m = {
+      ASK:`Con <b>ASK</b> (modulación por amplitud) un <b>1</b> se envía con una onda <b>alta</b> y un <b>0</b> con una onda <b>baja</b>.`,
+      FSK:`Con <b>FSK</b> (modulación por frecuencia) un <b>1</b> se envía con ondas más <b>juntas</b> (más frecuencia) y un <b>0</b> con ondas más <b>separadas</b>.`,
+      PSK:`Con <b>PSK</b> (modulación por fase) la onda tiene siempre el mismo tamaño y frecuencia, pero en un <b>0</b> se <b>invierte</b>: empieza bajando en vez de subiendo.`}[S.mod];
+    return {
+    title:'4. Modulación: los bits se convierten en onda',
+    body:`Los bits no pueden viajar por el aire tal cual. La <b>capa física</b> genera una <b>onda portadora</b> (una señal que oscila ${freqWords(F.ghz)} de veces por segundo) y la <b>modifica</b> según cada bit. A esto se le llama <b>modulación</b> y lo hace el chip de radio.
+          <br><br>${m}<br><br>Después, la señal eléctrica se envía a la <b>antena</b>.`,
+    key:`<b>Prueba:</b> cambia la modulación en el menú de arriba y observa cómo cambia la onda. Wi-Fi, 4G y 5G combinan amplitud y fase a la vez (QAM).`};}
+  case 4: {
+    const LB = T.LB, walls = wallCount(), dish = S.ant === 'dish';
+    const antTxt = dish
+      ? `Las <b>antenas parabólicas</b> concentran la energía en un haz estrecho, como una linterna, y ganan <b>+${fmt(LB.g,0)} dB</b> cada una. Con el mismo plato, cuanto más alta es la frecuencia, más estrecho y potente es el haz${F.ghz < 0.1 ? ` (pero a ${F.label} la onda mide ${lamTxt(F.ghz)}: un plato de 60 cm es demasiado pequeño y no sirve de nada)` : ''}.`
+      : `Las antenas <b>omnidireccionales</b> emiten en todas direcciones, como una bombilla: casi toda la energía se va hacia donde no está el receptor.`;
+    const medio = isSat()
+      ? `La señal sube <b>${distTxt()}</b>: cruza la atmósfera y después el <b>espacio vacío</b>, sin paredes ni obstáculos. Pero la distancia es enorme: solo por eso se debilita <b>${fmt(LB.fspl,0)} dB</b> (cada 10 dB = 10 veces menos potencia).${S.rain && F.rain ? ` La <b>lluvia</b> le quita otros ${fmt(F.rain,0)} dB.` : ''}`
+      : `Por el camino atraviesa ${walls ? `<b>${walls} pared${walls>1?'es':''}</b> y otros obstáculos, que absorben más cuanto mayor es la frecuencia` : '<b>aire libre</b>'}, y la distancia también la debilita.`;
+    const result = LB.blocked
+      ? `<b class="bad">¡A ${F.label} la ionosfera refleja la onda de vuelta a la Tierra y nunca llega al satélite!</b> Por eso los satélites usan frecuencias de GHz.`
+      : `Nivel de señal que llega: <b class="${T.a > .3 ? 'ok' : 'bad'}">${Math.round(T.a*100)} %</b>${T.a <= 0.05 ? ': prácticamente nada, el receptor solo oirá ruido' : ''}.`;
+    return {
+    title: isSat() ? '5. La onda viaja hasta el satélite' : '5. La onda electromagnética viaja por el aire',
+    body:`La corriente que oscila en la <b>antena</b> crea una <b>onda electromagnética</b>: un campo <b style="color:#fb923c">eléctrico (E)</b> y otro <b style="color:#60a5fa">magnético (B)</b>, perpendiculares, que avanzan a la <b>velocidad de la luz</b> (300 000 km/s). ¡No necesita cables, ni siquiera aire!
+          A ${F.label} la longitud de onda es <b>λ ≈ ${lamTxt(F.ghz)}</b> y recorrer ${distTxt()} le cuesta <b>${timeTxt(LB.secs)}</b>.
+          <br><br>${medio} ${antTxt}<br><br>${result}`,
+    key: isSat()
+      ? `<b>¿Por qué el satélite llega tan lejos?</b> No es por la frecuencia alta, sino porque el camino está <b>libre de obstáculos</b> y se usan <b>antenas parabólicas</b>. Prueba con antenas omnidireccionales… Y fíjate en el retardo: ${timeTxt(LB.secs)} solo de ida${S.dist > 30000 ? ' (por eso las videollamadas por satélite geoestacionario van con retraso)' : ''}.`
+      : `<b>Idea clave:</b> cuanto más lejos y más obstáculos, más débil llega la señal: por eso el Wi-Fi va peor en la otra punta de casa. Las frecuencias altas transportan más datos, pero atraviesan peor las paredes.`};}
+  case 5: {
+    const crit = {ASK:'¿la onda es alta o baja?', FSK:'¿las ondas van juntas o separadas?', PSK:'¿la onda empieza subiendo o bajando?'}[S.mod];
+    return {
+    title:'6. Recepción y demodulación',
+    body:`La antena del receptor capta una señal <b>muy débil</b>. El receptor la <b>amplifica</b> (¡amplificando también el ruido!), la filtra y la <b>demodula</b>: analiza cada trocito de onda y decide si era un 1 o un 0 (${crit}).
+          <br><br>${E ? `<b class="bad">Se han producido ${E} error${E>1?'es':''} de bit</b> (en rojo): el ruido ha engañado al receptor.` : `<b class="ok">Todos los bits se han recibido correctamente.</b>`}`,
+    key:`<b>Experimenta:</b> sube el ruido o la distancia. ¿Qué modulación resiste mejor? (Pista: PSK suele aguantar más y ASK es la más frágil).`};}
+  case 6: return {
+    title:'7. Comprobación de errores',
+    body:`La capa de enlace del receptor detecta el <b>preámbulo</b>, comprueba que la <b>dirección destino</b> es la suya y <b>recalcula el control de errores</b> con los datos recibidos:
+          <ul><li>Si coincide con el que venía en la trama → todo correcto y responde con un <b class="ok">ACK</b> (acuse de recibo).</li>
+          <li>Si no coincide → la trama se <b class="bad">descarta</b> y el emisor la <b>vuelve a enviar</b>.</li></ul>
+          ${T.ok ? `<b class="ok">✔ Intento ${S.attempt}: trama correcta.</b>` : `<b class="bad">✘ Intento ${S.attempt}: la trama ha llegado dañada${Edata===0?' (dirección alterada)':''}.</b>`}`,
+    key:`<b>Idea clave:</b> en Wi-Fi las retransmisiones son automáticas y constantes. Cuando hay muchas, notas la conexión lenta.`,
+    actions: T.ok ? '' : `<button class="warn" id="btnRetx">↻ Retransmitir la trama</button>`};
+  case 7: return {
+    title:'8. Del binario al texto: ¡entregado!',
+    body:`El receptor agrupa los bits de 8 en 8, convierte cada byte en su carácter con la misma tabla (UTF-8) y la <b>aplicación</b> muestra el mensaje en pantalla.
+          <br><br>${T.ok ? `<b class="ok">Mensaje recibido: “${safeMsg(T.rxText)}”.</b> El viaje por ${isSat() ? 'el espacio' : 'el aire'} ha durado solo ${timeTxt(T.LB.secs)}.`
+                          : `<b class="bad">La trama llegó dañada.</b> Aquí ves lo que se habría leído (“${safeMsg(T.rxText)}”), pero en la realidad no se entregaría: se seguiría retransmitiendo.`}`,
+    key:`<b>Resumen del viaje:</b> texto → bits → trama → onda → ${isSat() ? 'espacio' : 'aire'} → onda → bits → trama → texto.`,
+    actions:`<button class="primary" id="btnAgain">✎ Enviar otro mensaje</button>`};
+  }
+}
+function updateExplain(){
+  const i = S.stage, e = explain(i), c = stageColor(i), st = STAGES[i];
+  const side = st.side === 'tx' ? 'Emisor' : st.side === 'rx' ? 'Receptor' : 'Medio de transmisión';
+  const box = $('#explain');
+  box.style.setProperty('--c', c);
+  box.innerHTML = `<span class="pill">${st.layer===4 ? (isSat() ? 'Atmósfera y espacio' : 'Aire') : (i===7 ? 'Codificación y aplicación' : LAYERS[st.layer].name)} · ${side}</span>
+    <h2>${e.title}</h2><div class="body">${e.body}</div>
+    ${e.actions ? `<div class="actions">${e.actions}</div>` : ''}
+    <div class="key">${e.key}</div>`;
+  const r = $('#btnRetx'); if (r) r.onclick = retransmit;
+  const g = $('#btnAgain'); if (g) g.onclick = () => { $('#msg').focus(); $('#msg').select(); };
+}
+function refreshLabels(){
+  const LB = linkBudget(), wc = wallCount();
+  $('#distL').textContent = isSat() ? 'Altura de la órbita' : 'Distancia';
+  $('#distV').textContent = distTxt();
+  $('#distHint').textContent = isSat()
+    ? (S.dist < 2000 ? 'Órbita baja (LEO) · p. ej. Starlink' : S.dist < 30000 ? 'Órbita media (MEO) · p. ej. GPS' : 'Geoestacionaria (GEO) · TV por satélite')
+    : (wc ? `${wc} pared${wc>1?'es':''} por medio` : 'Sin paredes por medio');
+  $('#antHint').textContent = S.ant === 'dish' ? `Haz estrecho · +${fmt(LB.g,0)} dB cada una` : 'Emiten en todas direcciones';
+  $('#rainL').style.display = isSat() ? '' : 'none';
+  $('#landHint').style.display = isSat() ? 'none' : '';
+  $('#noiseV').textContent = Math.round(S.noise*100) + ' %';
+  $('#speedV').textContent = fmt(S.speed,2) + '×';
+  $('#modHint').textContent = MODS[S.mod].hint;
+  $('#freqHint').textContent = FREQS[S.freq].hint;
+  const n = new TextEncoder().encode($('#msg').value).length;
+  $('#msgInfo').textContent = `${Array.from($('#msg').value).length}/12 caracteres · ${n} bytes`;
+}
+function onParam(){ refreshLabels(); compute(); updateExplain(); }
+$('#mod').onchange   = e => { S.mod = e.target.value; onParam(); };
+$('#freq').onchange  = e => { S.freq = +e.target.value; onParam(); };
+$('#dist').oninput   = e => { S.dist = +e.target.value; onParam(); };
+$('#noise').oninput  = e => { S.noise = e.target.value/100; onParam(); };
+$('#speed').oninput  = e => { S.speed = +e.target.value; refreshLabels(); };
+FREQS.forEach((f,i) => $('#freq').add(new Option(f.name, i)));
+$('#freq').value = S.freq;
+$('#sceneHint').innerHTML = `<span id="landHint">Casa u oficina, con paredes</span><label class="chk" id="rainL"><input type="checkbox" id="rain"> 🌧️ Está lloviendo</label>`;
+$('#rain').onchange = e => { S.rain = e.target.checked; onParam(); };
+function syncSeg(){
+  document.querySelectorAll('#sceneSel button').forEach(b => b.classList.toggle('on', b.dataset.v === S.scene));
+  document.querySelectorAll('#antSel button').forEach(b => b.classList.toggle('on', b.dataset.v === S.ant));
+}
+function setScene(v){
+  S.scene = v;
+  const d = $('#dist');
+  if (v === 'sat'){ d.min = 500; d.max = 36000; d.step = 50; S.dist = 35800; S.freq = 4; S.ant = 'dish'; }
+  else            { d.min = 1;   d.max = 100;   d.step = 1;  S.dist = 20;    S.freq = 2; S.ant = 'omni'; }
+  d.value = S.dist; $('#freq').value = S.freq; syncSeg(); onParam();
+}
+document.querySelectorAll('#sceneSel button').forEach(b => b.onclick = () => setScene(b.dataset.v));
+document.querySelectorAll('#antSel button').forEach(b => b.onclick = () => { S.ant = b.dataset.v; syncSeg(); onParam(); });
+$('#msg').oninput    = refreshLabels;
+function send(){
+  const v = $('#msg').value.trim() || 'Hola';
+  $('#msg').value = v; S.msg = v; S.attempt = 1; S.seed = (Date.now() % 100000) + 1;
+  refreshLabels(); compute(); goStage(0); setPlaying(true);
+}
+$('#send').onclick = send;
+$('#msg').onkeydown = e => { if (e.key === 'Enter') send(); };
+$('#play').onclick  = () => { if (!S.playing && S.stage === 7 && S.t >= DUR[7]) goStage(0); setPlaying(!S.playing); };
+$('#next').onclick  = () => goStage(S.stage + 1);
+$('#prev').onclick  = () => goStage(S.stage - 1);
+$('#reset').onclick = () => { S.attempt = 1; compute(); goStage(0); setPlaying(false); };
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+  if (e.key === 'ArrowRight') goStage(S.stage + 1);
+  else if (e.key === 'ArrowLeft') goStage(S.stage - 1);
+  else if (e.key === ' ') { e.preventDefault(); $('#play').click(); }
+});
+
+/* =====================================================================
+   ESCENA PRINCIPAL: emisor · aire · receptor
+   ===================================================================== */
+const sceneC = $('#scene'), detailC = $('#detail');
+const noiseRnd = Math.random;
+
+function sceneGeometry(w,h){
+  const fw = w < 600 ? w*0.31 : clamp(w*0.2, 170, 230);
+  const top = 70, bottom = h - 18;
+  const frame = x => ({x, y:top, w:fw, h:bottom-top});
+  const tx = frame(16), rx = frame(w-16-fw);
+  const boxes = f => { const gap = 8, bh = (f.h - 46 - 3*gap)/4;
+    return [0,1,2,3].map(i => ({x:f.x+10, y:f.y+38+i*(bh+gap), w:f.w-20, h:bh})); };
+  const bt = boxes(tx), br = boxes(rx);
+  const antY = bt[3].y + bt[3].h/2;
+  const antTx = {x:tx.x+tx.w+20, y:antY-92, base:antY};
+  const antRx = {x:rx.x-20,       y:antY-92, base:antY};
+  return {tx, rx, bt, br, antTx, antRx, top, bottom};
+}
+const center = b => ({x:b.x+b.w/2, y:b.y+b.h/2});
+
+function layerActive(side,i){
+  const st = STAGES[S.stage];
+  if (S.stage === 7) return side==='rx' && i === (S.t < 1.6 ? 1 : 0);
+  return st.side === side && st.layer === i;
+}
+function layerDone(side,i){
+  if (side === 'tx') return S.stage > i;
+  const map = {3:5, 2:6, 1:7, 0:8};
+  return S.stage > map[i] || (i===1 && S.stage===7 && S.t>=1.6) || (i===0 && S.stage===7 && S.t>=DUR[7]-0.01);
+}
+
+function drawDevice(ctx, f, boxes, side){
+  const T = S.tx;
+  const g = ctx.createLinearGradient(f.x,f.y,f.x,f.y+f.h);
+  g.addColorStop(0,'rgba(30,42,90,.9)'); g.addColorStop(1,'rgba(14,20,46,.95)');
+  rr(ctx,f.x,f.y,f.w,f.h,16); ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle='rgba(120,140,230,.35)'; ctx.lineWidth=1.2; ctx.stroke();
+  const title = side==='tx' ? (isSat() ? (f.w < 175 ? '📡  ESTACIÓN' : '📡  ESTACIÓN TERRESTRE') : '📱  EMISOR')
+                            : (isSat() ? '🛰️  SATÉLITE' : '💻  RECEPTOR');
+  txt(ctx, title, f.x+f.w/2, f.y+20, {size: f.w < 190 ? 12 : 13, weight:700, align:'center', color:'#c7d0ff'});
+  const subs = side==='tx'
+    ? [`“${S.msg}”`, `${T.data.length} bytes`, `trama · ${T.bits.length} bits`, `${S.mod} · ${FREQS[S.freq].label}`]
+    : [(S.stage===7 && S.t>3) ? `“${T.rxText}”` : 'esperando…', 'bits → texto', 'comprueba la trama', 'onda → bits'];
+  boxes.forEach((b,i) => {
+    const L = LAYERS[i], act = layerActive(side,i), done = layerDone(side,i);
+    ctx.save();
+    if (act){ ctx.shadowColor = L.color; ctx.shadowBlur = 22 + 8*Math.sin(S.clock*5); }
+    rr(ctx,b.x,b.y,b.w,b.h,10);
+    ctx.fillStyle = act ? hexA(L.color,.24) : done ? hexA(L.color,.10) : 'rgba(255,255,255,.03)';
+    ctx.fill(); ctx.restore();
+    rr(ctx,b.x,b.y,b.w,b.h,10);
+    ctx.strokeStyle = act ? L.color : hexA(L.color, done ? .55 : .25); ctx.lineWidth = act ? 2 : 1; ctx.stroke();
+    rr(ctx,b.x,b.y,5,b.h,3); ctx.fillStyle = hexA(L.color, act||done ? .95 : .4); ctx.fill();
+    const small = b.w < 150;
+    txt(ctx, (small ? '' : L.icon + ' ') + L.name, b.x+14, b.y+b.h/2-9, {size:small?11.5:13, weight:700, color: act ? '#fff' : done ? '#dfe4ff' : '#9aa4d4'});
+    let s = subs[i]; if (s.length > (small?16:24)) s = s.slice(0, small?15:23) + '…';
+    txt(ctx, s, b.x+14, b.y+b.h/2+10, {size:11.5, color: act ? L.color : '#7883b6', font: i===0 ? '"Segoe UI",sans-serif' : MONO});
+  });
+}
+
+function drawAntenna(ctx, a, glow, color, dir){
+  const dish = S.ant === 'dish';
+  ctx.strokeStyle = '#8b95c9'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(a.x - dir*20, a.base); ctx.lineTo(a.x, a.base); ctx.lineTo(a.x, a.y + (dish ? 20 : 0)); ctx.stroke();
+  let fx = a.x;
+  if (dish){
+    // plato parabólico con la boca mirando hacia el otro extremo
+    const cx = a.x - dir*3; fx = a.x + dir*9;
+    ctx.strokeStyle = '#c7d0ff'; ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    if (dir > 0) ctx.ellipse(cx, a.y, 9, 22, 0, Math.PI/2, Math.PI*1.5);
+    else         ctx.ellipse(cx, a.y, 9, 22, 0, -Math.PI/2, Math.PI/2);
+    ctx.stroke();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = '#8b95c9';
+    ctx.beginPath(); ctx.moveTo(cx, a.y-21); ctx.lineTo(fx, a.y); ctx.lineTo(cx, a.y+21); ctx.stroke();
+  }
+  ctx.save();
+  ctx.shadowColor = color; ctx.shadowBlur = glow ? 25 : 0;
+  ctx.beginPath(); ctx.arc(fx, a.y, glow ? 6 : 4.5, 0, 7); ctx.fillStyle = glow ? color : '#8b95c9'; ctx.fill();
+  ctx.restore();
+}
+// línea ondulada entre dos puntos (amplitud variable y ruido opcional)
+function wavy(ctx, x0, y0, x1, y1, amp0, amp1, lam, phase, jit){
+  const dx = x1-x0, dy = y1-y0, len = Math.hypot(dx,dy); if (len < 1) return;
+  const ux = dx/len, uy = dy/len, nx = -uy, ny = ux;
+  ctx.beginPath();
+  for (let d=0; d<=len; d+=2){
+    const fr = d/len, o = (amp0 + (amp1-amp0)*fr)*Math.sin(d*2*Math.PI/lam - phase) + (noiseRnd()-0.5)*jit*(0.3+fr);
+    const x = x0 + ux*d + nx*o, y = y0 + uy*d + ny*o;
+    d === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+}
+const STARS = Array.from({length:140}, (_,i) => { const r = mulberry32(i*7919+13); return {x:r(), y:r(), s:r()*1.3+0.3, tw:r()*6}; });
+
+function drawScene(){
+  const {ctx,w,h} = setupCanvas(sceneC), G = sceneGeometry(w,h), T = S.tx, st = S.stage, t = S.t, sat = isSat(), dish = S.ant === 'dish';
+  const A0 = G.antTx, A1 = G.antRx, L = A1.x - A0.x, F = FREQS[S.freq], LB = T.LB;
+  const airX0 = G.tx.x+G.tx.w, airX1 = G.rx.x, airW = airX1 - airX0;
+  const xAtm = airX0 + airW*0.18, xIon = airX0 + airW*0.24;
+
+  // ---- fondo ----
+  if (sat){
+    const g = ctx.createLinearGradient(airX0,0,airX1,0);
+    g.addColorStop(0,'rgba(56,130,246,.30)'); g.addColorStop(0.17,'rgba(56,130,246,.12)'); g.addColorStop(0.3,'rgba(0,0,0,.35)'); g.addColorStop(1,'rgba(0,0,0,.55)');
+    ctx.fillStyle = g; ctx.fillRect(airX0-20, 0, airW+40, h);
+    STARS.forEach(s0 => {
+      const x = airX0 + s0.x*airW; if (x < xIon + 6) return;
+      ctx.globalAlpha = 0.35 + 0.35*Math.sin(S.clock*1.5 + s0.tw);
+      ctx.fillStyle = '#fff'; ctx.fillRect(x, 8 + s0.y*(h-16), s0.s, s0.s);
+    });
+    ctx.globalAlpha = 1;
+    // ionosfera
+    const ig = ctx.createLinearGradient(xIon-10,0,xIon+10,0);
+    ig.addColorStop(0,'rgba(167,139,250,0)'); ig.addColorStop(.5, LB.blocked ? 'rgba(248,113,113,.45)' : 'rgba(167,139,250,.35)'); ig.addColorStop(1,'rgba(167,139,250,0)');
+    ctx.fillStyle = ig; ctx.fillRect(xIon-10, 56, 20, G.bottom-76);
+    txt(ctx,'Atmósfera', (airX0+xAtm)/2, 66, {size:10.5, weight:700, align:'center', color:'#93c5fd'});
+    txt(ctx,'Ionosfera', xIon, G.bottom-30, {size:10.5, weight:700, align:'center', color: LB.blocked ? '#f87171' : '#c4b5fd'});
+    txt(ctx,'Espacio (vacío)', (xIon+airX1)/2, 66, {size:10.5, weight:700, align:'center', color:'#8b95c9'});
+    if (S.rain){
+      txt(ctx,'☁️', (airX0+xAtm)/2, 90, {size:22, align:'center'});
+      ctx.strokeStyle = 'rgba(147,197,253,.55)'; ctx.lineWidth = 1.2;
+      for (let i=0;i<34;i++){
+        const x = airX0 + 8 + ((i*53.7) % Math.max(10, xAtm-airX0-10)), y = 104 + ((i*97 + S.clock*230) % (G.bottom-140));
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x-3, y+10); ctx.stroke();
+      }
+    }
+  } else {
+    ctx.strokeStyle = 'rgba(120,140,230,.06)'; ctx.lineWidth = 1;
+    for (let x=0;x<w;x+=32){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+    for (let y=0;y<h;y+=32){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+    const wc = wallCount();
+    for (let i=0;i<wc;i++){
+      const x = A0.x + L*(i+1)/(wc+1);
+      ctx.fillStyle = 'rgba(148,163,184,.13)'; ctx.fillRect(x-6, 70, 12, G.bottom-100);
+      ctx.strokeStyle = 'rgba(148,163,184,.35)'; ctx.lineWidth = 1; ctx.strokeRect(x-6, 70, 12, G.bottom-100);
+      for (let y=80; y<G.bottom-32; y+=14){ ctx.beginPath(); ctx.moveTo(x-6,y); ctx.lineTo(x+6,y); ctx.stroke(); }
+      txt(ctx,'pared', x, 62, {size:10, align:'center', color:'#8b95c9'});
+    }
+  }
+
+  // ---- títulos y regla ----
+  txt(ctx, sat ? 'ATMÓSFERA Y ESPACIO · medio de transmisión' : 'AIRE · medio de transmisión', (airX0+airX1)/2, 24, {size:12, weight:700, align:'center', color: st===4 ? AIR : '#6d78ad'});
+  txt(ctx, `${F.label} · ${S.mod} · antenas ${dish ? 'parabólicas' : 'omnidireccionales'}`, (airX0+airX1)/2, 42, {size:11, align:'center', color:'#6d78ad', font:MONO});
+  const ry = G.bottom - 8;
+  ctx.strokeStyle = '#3b4780'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(A0.x+10, ry); ctx.lineTo(A1.x-10, ry); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#0b1230'; const lbl = `⟷  ${distTxt()}`;
+  ctx.font = '600 12px "Segoe UI"'; const lw = ctx.measureText(lbl).width + 16;
+  rr(ctx, (A0.x+A1.x)/2 - lw/2, ry-11, lw, 22, 11); ctx.fill(); ctx.strokeStyle='#3b4780'; ctx.stroke();
+  txt(ctx, lbl, (A0.x+A1.x)/2, ry, {size:12, weight:600, align:'center', color:'#a9b3e6'});
+
+  // ---- propagación ----
+  let p = 0;
+  if (st === 4) p = clamp(t / (DUR[4]*0.65), 0, 1);
+  else if (st > 4) p = 1;
+  const emitting = (st === 4) || (st === 3 && t > DUR[3]-1.5);
+  const pb = LB.blocked ? (xIon - A0.x)/L : 1;          // hasta dónde llega si la ionosfera la refleja
+  const reach = Math.min(p, pb) * L;
+
+  ctx.save(); ctx.beginPath(); ctx.rect(airX0, 0, airW, h); ctx.clip();
+  if (st === 4){
+    const spacing = F.vis*1.3, maxR = L + 40;
+    for (let k=0;k<40;k++){
+      const r = ((S.clock*120) % spacing) + k*spacing;
+      if (r > reach + 12 || r > maxR) continue;
+      const alpha = 0.6 * (1 - r/maxR) * (0.35 + 0.65*Math.max(T.a, 0.3));
+      ctx.strokeStyle = hexA(AIR, alpha); ctx.lineWidth = 2;
+      if (dish){                                          // haz estrecho: frentes casi planos
+        const hb = 16 + r*0.025, x = A0.x + 9 + r;
+        ctx.beginPath(); ctx.moveTo(x, A0.y-hb); ctx.lineTo(x, A0.y+hb); ctx.stroke();
+      } else {                                            // en todas direcciones
+        ctx.beginPath(); ctx.arc(A0.x, A0.y, r, -Math.PI/2.4, Math.PI/2.4); ctx.stroke();
+      }
+    }
+    if (dish){
+      ctx.fillStyle = hexA(AIR, .06);
+      ctx.beginPath(); ctx.moveTo(A0.x+9, A0.y-16); ctx.lineTo(A0.x+9+reach, A0.y-16-reach*0.025); ctx.lineTo(A0.x+9+reach, A0.y+16+reach*0.025); ctx.lineTo(A0.x+9, A0.y+16); ctx.fill();
+    }
+  }
+  if (p > 0){
+    const grad = ctx.createLinearGradient(A0.x,0,A1.x,0);
+    grad.addColorStop(0,'#f59e0b'); grad.addColorStop(1,AIR);
+    ctx.strokeStyle = grad; ctx.lineWidth = st===4 ? 2.6 : 1.6; ctx.globalAlpha = st===4 ? 1 : 0.35;
+    ctx.shadowColor = AIR; ctx.shadowBlur = st===4 ? 12 : 0;
+    const jit = (st===4 || st===5) ? S.noise*26 : 0, ph = S.clock*9;
+    const ampAt = fr => 28*(1 - fr*(1-T.a));
+    wavy(ctx, A0.x, A0.y, A0.x + reach, A0.y, 28, ampAt(reach/L), F.vis, ph, jit);
+    if (LB.blocked && p > pb){
+      const q = (p - pb)/(1 - pb), ex = xIon + (A0.x + 30 - xIon)*q, ey = A0.y + (G.bottom - 40 - A0.y)*q;
+      ctx.strokeStyle = '#f87171';
+      wavy(ctx, xIon, A0.y, ex, ey, ampAt(pb), 14, F.vis, ph, jit);
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    if (LB.blocked && p >= pb) txt(ctx, '↩ La ionosfera refleja esta frecuencia', xIon + 14, A0.y - 46, {size:12.5, weight:700, color:'#f87171'});
+  } else {
+    ctx.strokeStyle = 'rgba(140,150,210,.18)'; ctx.setLineDash([3,7]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(A0.x, A0.y); ctx.lineTo(A1.x, A1.y); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // Ruido / interferencias
+  if (st >= 4 && st <= 5 && S.noise > 0){
+    const n = Math.round(S.noise*60);
+    for (let i=0;i<n;i++){
+      const x = airX0 + 20 + noiseRnd()*(airW-40), y = 60 + noiseRnd()*(G.bottom-100);
+      ctx.fillStyle = hexA(noiseRnd()<.5 ? '#94a3b8' : '#fde68a', 0.25 + noiseRnd()*0.5);
+      ctx.fillRect(x, y, 2, 2);
+    }
+    if (S.noise > 0.35){
+      txt(ctx, '⚡', airX0 + airW*0.3, G.bottom-40 + Math.sin(S.clock*7)*3, {size:16, align:'center'});
+      txt(ctx, '⚡', airX0 + airW*0.72, 80 + Math.cos(S.clock*6)*3, {size:14, align:'center'});
+    }
+  }
+  // ACK de vuelta
+  if (st === 6 && t > 4){
+    const q = clamp((t-4)/2.5, 0, 1);
+    if (T.ok){
+      const x = A1.x - q*L, y = A0.y + 40;
+      ctx.save(); ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 16;
+      rr(ctx, x-26, y-12, 52, 24, 12); ctx.fillStyle = 'rgba(74,222,128,.2)'; ctx.fill();
+      ctx.strokeStyle = '#4ade80'; ctx.stroke(); ctx.restore();
+      txt(ctx, '◀ ACK', x, y, {size:12, weight:700, align:'center', color:'#4ade80'});
+    } else {
+      txt(ctx, '✘ Sin ACK → el emisor reenviará', (A0.x+A1.x)/2, A0.y + 48, {size:13, weight:700, align:'center', color:'#f87171'});
+    }
+  }
+  ctx.restore();
+
+  drawDevice(ctx, G.tx, G.bt, 'tx');
+  drawDevice(ctx, G.rx, G.br, 'rx');
+  drawAntenna(ctx, A0, emitting, '#f59e0b', 1);
+  drawAntenna(ctx, A1, !LB.blocked && ((st===4 && p>=1) || (st===5 && t<2)), AIR, -1);
+
+  // Ficha de datos que viaja por las capas
+  const paths = [
+    [center(G.bt[0])], [center(G.bt[0]),center(G.bt[1])], [center(G.bt[1]),center(G.bt[2])], [center(G.bt[2]),center(G.bt[3]),{x:A0.x,y:A0.base}],
+    [{x:A0.x,y:A0.y},{x:A1.x,y:A1.y}], [{x:A1.x,y:A1.y},{x:A1.x,y:A1.base},center(G.br[3])], [center(G.br[3]),center(G.br[2])], [center(G.br[2]),center(G.br[1]),center(G.br[0])]
+  ];
+  let f = st===4 ? p : st===7 ? clamp(t/3.2,0,1) : st===3 ? (t < 1.2 ? ease(t/1.2)*0.5 : 0.5 + 0.5*ease((t-(DUR[3]-2))/1.5)) : ease(t/1.2);
+  if (st === 4 && LB.blocked){
+    const pbk = (xIon - A0.x)/L;
+    paths[4] = [{x:A0.x,y:A0.y},{x:xIon,y:A0.y},{x:A0.x+30,y:G.bottom-40}];
+    f = p <= pbk ? (p/pbk)*0.5 : 0.5 + 0.5*(p-pbk)/(1-pbk);
+  }
+  const pos = along(paths[st], clamp(f,0,1));
+  const col = stageColor(st);
+  const labels = [`“${S.msg}”`, '01001…', '[trama]', '∿∿∿', '∿∿∿', LB.blocked ? '¿? solo ruido' : '01001…', '[trama]', `“${T.rxText}”`];
+  let lab = labels[st]; if (lab.length > 14) lab = lab.slice(0,13)+'…”';
+  ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 24;
+  ctx.beginPath(); ctx.arc(pos.x, pos.y, 8 + Math.sin(S.clock*6)*1.5, 0, 7); ctx.fillStyle = col; ctx.fill(); ctx.restore();
+  ctx.beginPath(); ctx.arc(pos.x, pos.y, 3.5, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.font = `700 12px ${MONO}`; const tw = ctx.measureText(lab).width + 16;
+  let bx = clamp(pos.x - tw/2, 4, w - tw - 4), by = pos.y - 36;
+  rr(ctx, bx, by, tw, 22, 8); ctx.fillStyle = 'rgba(8,12,30,.92)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1.3; ctx.stroke();
+  txt(ctx, lab, bx + tw/2, by + 11, {size:12, weight:700, align:'center', color:col, font:MONO});
+}
+function along(pts, f){
+  if (pts.length === 1) return pts[0];
+  const seg = []; let total = 0;
+  for (let i=1;i<pts.length;i++){ const d = Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y); seg.push(d); total += d; }
+  let d = f*total;
+  for (let i=0;i<seg.length;i++){
+    if (d <= seg[i] || i === seg.length-1){ const r = seg[i] ? clamp(d/seg[i],0,1) : 1;
+      return {x: pts[i].x + (pts[i+1].x-pts[i].x)*r, y: pts[i].y + (pts[i+1].y-pts[i].y)*r}; }
+    d -= seg[i];
+  }
+}
+
+/* =====================================================================
+   VISTA DETALLADA: cambia en cada paso
+   ===================================================================== */
+function header(ctx, w, title, color){
+  txt(ctx, 'VISTA DETALLADA', 18, 20, {size:10.5, weight:700, color:'#6d78ad'});
+  txt(ctx, title, 18, 38, {size:15, weight:700, color});
+}
+function drawDetail(){
+  const {ctx,w,h} = setupCanvas(detailC), st = S.stage, c = stageColor(st);
+  [d0,d1,d2,d3,d4,d5,d6,d7][st](ctx, w, h, c, S.t, S.tx);
+}
+
+// 0 · Mensaje en el chat
+function d0(ctx,w,h,c,t,T){
+  header(ctx,w,'La aplicación recibe el texto',c);
+  const pw = Math.min(360, w-40), px = (w-pw)/2, py = 56, ph = h-72;
+  rr(ctx,px,py,pw,ph,22); ctx.fillStyle='#0a1029'; ctx.fill(); ctx.strokeStyle='#2b3a78'; ctx.lineWidth=2; ctx.stroke();
+  rr(ctx,px,py,pw,40,22); ctx.fillStyle='rgba(167,139,250,.15)'; ctx.fill();
+  txt(ctx,`💬  Chat con: ${devName('rx')}`,px+18,py+20,{size:13,weight:600,color:'#cfc4ff'});
+  const chars = Array.from(S.msg), n = Math.min(chars.length, Math.floor(t*5));
+  const typed = chars.slice(0,n).join('');
+  const sent = t > chars.length/5 + 1.2;
+  // burbuja
+  if (sent){
+    ctx.font = '600 20px "Segoe UI"'; const bw = Math.min(pw-60, ctx.measureText(S.msg).width + 34);
+    const k = ease((t - chars.length/5 - 1.2)/0.5), bx = px+pw-bw-16, by = py+60 + (1-k)*60;
+    ctx.globalAlpha = k; rr(ctx,bx,by,bw,44,16); const g=ctx.createLinearGradient(bx,0,bx+bw,0); g.addColorStop(0,'#7c3aed'); g.addColorStop(1,'#a78bfa'); ctx.fillStyle=g; ctx.fill();
+    txt(ctx,S.msg,bx+bw/2,by+22,{size:20,weight:600,align:'center',color:'#fff'});
+    txt(ctx,'enviado ✓',bx+bw-4,by+58,{size:11,align:'right',color:'#9aa4d4'}); ctx.globalAlpha=1;
+    txt(ctx,'↓ Se entrega a la capa de codificación',px+pw/2,py+ph-60,{size:12.5,align:'center',color:c});
+  }
+  // caja de escritura
+  const iy = py+ph-44;
+  rr(ctx,px+12,iy,pw-24,32,16); ctx.fillStyle='#131c3d'; ctx.fill(); ctx.strokeStyle='#2b3a78'; ctx.lineWidth=1; ctx.stroke();
+  const cursor = Math.floor(S.clock*2)%2 ? '|' : ' ';
+  txt(ctx, sent ? 'Escribe un mensaje…' : typed + cursor, px+28, iy+16, {size:15, color: sent ? '#5d6798' : '#fff'});
+  txt(ctx,'➤',px+pw-32,iy+16,{size:16,align:'center',color:c});
+}
+
+// 1 · Caracteres → códigos → bits
+function d1(ctx,w,h,c,t,T){
+  header(ctx,w,'Cada carácter se convierte en 8 bits (1 byte)',c);
+  const units = T.data.length, uw = Math.min(64, (w-36)/units);
+  let x = (w - uw*units)/2, bi = 0;
+  const cellH = Math.min(17, (h-170)/8);
+  T.chars.forEach((ch,ci) => {
+    const k = ease((t - 0.3 - ci*0.45)/0.5); if (k <= 0){ x += uw*ch.bytes.length; bi += ch.bytes.length; return; }
+    const cw = uw*ch.bytes.length;
+    ctx.globalAlpha = k;
+    rr(ctx,x+3,58,cw-6,h-72,10); ctx.fillStyle='rgba(34,211,238,.06)'; ctx.fill(); ctx.strokeStyle=hexA(c,.35); ctx.lineWidth=1; ctx.stroke();
+    txt(ctx, ch.ch === ' ' ? '␣' : ch.ch, x+cw/2, 82, {size:24, weight:700, align:'center'});
+    txt(ctx, String(ch.cp), x+cw/2, 108, {size:12, align:'center', color:'#fbbf24', font:MONO});
+    ch.bytes.forEach((b,j) => {
+      for (let i=0;i<8;i++){
+        const bit = b>>(7-i)&1, y = 124 + i*cellH, on = t > 0.6 + ci*0.45 + i*0.06;
+        rr(ctx, x+j*uw+8, y, uw-16, cellH-3, 3);
+        ctx.fillStyle = on ? (bit ? c : 'rgba(34,211,238,.10)') : 'rgba(255,255,255,.03)'; ctx.fill();
+        if (on && uw > 26) txt(ctx, String(bit), x+j*uw+uw/2, y+(cellH-3)/2+1, {size:11, weight:700, align:'center', color: bit ? '#062530' : '#58c8dc', font:MONO});
+      }
+    });
+    ctx.globalAlpha = 1; x += cw; bi += ch.bytes.length;
+  });
+  txt(ctx, 'carácter', 14, 82, {size:10, color:'#6d78ad'});
+  txt(ctx, 'código', 14, 108, {size:10, color:'#6d78ad'});
+  if (t > T.chars.length*0.45 + 1.4)
+    txt(ctx, `${T.chars.length} caracteres  →  ${T.data.length} bytes  →  ${T.data.length*8} bits`, w/2, h-6, {size:12.5, weight:600, align:'center', color:c, base:'bottom'});
+}
+
+// 2 · Trama
+function d2(ctx,w,h,c,t,T){
+  header(ctx,w,'Se construye la trama: cabecera + datos + control',c);
+  const x0 = 18, W = w-36, nbits = T.bits.length;
+  // anchos: cada campo proporcional a sus bytes pero con un mínimo
+  const minW = Math.min(70, W/6);
+  const raw = T.fields.map(f => f.bytes.length);
+  const tot = raw.reduce((a,b)=>a+b,0);
+  let widths = raw.map(r => Math.max(minW, W*r/tot));
+  const sc = W / widths.reduce((a,b)=>a+b,0); widths = widths.map(v => v*sc);
+  const order = [3,0,1,2,4]; // primero datos, luego cabecera y cola
+  let x = x0; const y = 96, bh = 50;
+  // llaves
+  const hw = widths[0]+widths[1]+widths[2];
+  if (t > 1.8){
+    const bracket = (bx,bw,label,col) => { ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(bx+4,y-8); ctx.lineTo(bx+4,y-14); ctx.lineTo(bx+bw-4,y-14); ctx.lineTo(bx+bw-4,y-8); ctx.stroke();
+      txt(ctx,label,bx+bw/2,y-24,{size:11,weight:700,align:'center',color:col}); };
+    ctx.globalAlpha = ease((t-1.8)/0.6);
+    bracket(x0, hw, 'CABECERA', '#93c5fd'); bracket(x0+hw, widths[3], 'DATOS (el mensaje)', '#34d399'); bracket(x0+hw+widths[3], widths[4], 'COLA', '#fbbf24');
+    ctx.globalAlpha = 1;
+  }
+  T.fields.forEach((f,fi) => {
+    const k = ease((t - 0.2 - order.indexOf(fi)*0.4)/0.6), fw = widths[fi];
+    if (k > 0){
+      const dy = (1-k) * (fi===3 ? -40 : 40);
+      ctx.globalAlpha = k;
+      rr(ctx, x+2, y+dy, fw-4, bh, 8); ctx.fillStyle = hexA(f.color,.18); ctx.fill(); ctx.strokeStyle = f.color; ctx.lineWidth = 1.5; ctx.stroke();
+      txt(ctx, fw > 80 ? f.label : f.short, x+fw/2, y+dy+16, {size:11.5, weight:700, align:'center', color:f.color});
+      let val = fi===3 ? `“${S.msg}”` : fi===0 ? '10101010' : toHex(f.bytes[0]);
+      if (fi===3 && fw < 90) val = `${f.bytes.length} B`;
+      txt(ctx, val, x+fw/2, y+dy+34, {size:12, align:'center', color:'#e8ecff', font:MONO});
+      ctx.globalAlpha = 1;
+    }
+    x += fw;
+  });
+  // flujo de bits
+  if (t > 2.6){
+    txt(ctx, `Bits que se enviarán en orden (${nbits}):`, 18, 176, {size:12, color:'#9aa4d4'});
+    const perRow = Math.min(32, Math.floor(W/9)), cell = W/perRow, rows = Math.ceil(nbits/perRow);
+    const shown = Math.floor((t-2.6)*60);
+    const cs = Math.min(cell-2, (h-200)/rows - 3);
+    for (let i=0;i<Math.min(nbits,shown);i++){
+      const r = Math.floor(i/perRow), cc = i%perRow, col = T.fields[T.bitField[i]].color;
+      rr(ctx, x0 + cc*cell, 192 + r*(cs+3), cell-2, cs, 2);
+      ctx.fillStyle = T.bits[i] ? col : hexA(col,.15); ctx.fill();
+    }
+    txt(ctx, '■ = 1   □ = 0', w-18, 176, {size:11, align:'right', color:'#6d78ad'});
+  }
+}
+
+// helpers de osciloscopio
+function drawSignal(ctx, sig, pos, x0, yMid, W, amp, ppb, color, lw, dash){
+  ctx.save(); ctx.beginPath(); ctx.rect(x0, yMid-amp*1.9, W, amp*3.8); ctx.clip();
+  ctx.strokeStyle = color; ctx.lineWidth = lw; if (dash) ctx.setLineDash(dash);
+  ctx.beginPath(); const N = sig.length;
+  for (let px=0; px<=W; px+=1.2){
+    const si = (pos + px/ppb)*SPB, i0 = Math.floor(si), fr = si - i0;
+    const a = sig[((i0%N)+N)%N], b = sig[(((i0+1)%N)+N)%N];
+    const y = yMid - amp*(a + (b-a)*fr);
+    px===0 ? ctx.moveTo(x0+px,y) : ctx.lineTo(x0+px,y);
+  }
+  ctx.stroke(); ctx.restore();
+}
+function bitWindow(T, pos, W, ppb, fn){
+  const n = T.bits.length;
+  for (let b=Math.floor(pos); b<=Math.floor(pos + W/ppb)+1; b++){
+    const idx = ((b%n)+n)%n, x = (b-pos)*ppb;
+    fn(idx, x);
+  }
+}
+
+// 3 · Modulación
+function d3(ctx,w,h,c,t,T){
+  header(ctx,w,`Modulación ${MODS[S.mod].name}: cada bit modifica la onda portadora`,c);
+  const x0 = 18, W = w-36, ppb = clamp(W/8, 50, 95), pos = t*1.4 - 2;
+  const yD = 105, yM = 225;
+  ctx.save(); ctx.beginPath(); ctx.rect(x0,52,W,h-60); ctx.clip();
+  bitWindow(T,pos,W,ppb,(idx,x) => {
+    const X = x0 + x, col = T.fields[T.bitField[idx]].color;
+    ctx.fillStyle = hexA(col, idx%2 ? .05 : .09); ctx.fillRect(X, 60, ppb, h-70);
+    ctx.fillStyle = col; ctx.fillRect(X+1, 60, ppb-2, 3);
+    txt(ctx, String(T.bits[idx]), X+ppb/2, 76, {size:15, weight:700, align:'center', color:'#fff', font:MONO});
+    ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.beginPath(); ctx.moveTo(X, 60); ctx.lineTo(X, h-10); ctx.stroke();
+  });
+  // señal digital
+  ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2.5; ctx.beginPath(); let first = true, prevY = 0;
+  bitWindow(T,pos,W,ppb,(idx,x) => { const y = yD + (T.bits[idx] ? -18 : 18), X = x0+x;
+    if (first){ ctx.moveTo(X,y); first=false; } else ctx.lineTo(X,y); ctx.lineTo(X+ppb,y); });
+  ctx.stroke();
+  ctx.restore();
+  txt(ctx,'Señal digital (bits)', x0+4, yD+34, {size:10.5, color:'#22d3ee', weight:700});
+  txt(ctx,'Onda modulada que va a la antena', x0+4, yM-58, {size:10.5, color:c, weight:700});
+  ctx.shadowColor = c; ctx.shadowBlur = 8;
+  drawSignal(ctx, T.sig, pos, x0, yM, W, 44, ppb, c, 2.4);
+  ctx.shadowBlur = 0;
+  // cursor de lectura
+  const cx = x0 + W/2, bIdx = ((Math.floor(pos + (W/2)/ppb) % T.bits.length) + T.bits.length) % T.bits.length;
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(cx, 58); ctx.lineTo(cx, h-12); ctx.stroke(); ctx.setLineDash([]);
+  const b = T.bits[bIdx];
+  const desc = {ASK: b ? 'onda ALTA' : 'onda BAJA', FSK: b ? 'ondas JUNTAS' : 'ondas SEPARADAS', PSK: b ? 'fase normal' : 'fase INVERTIDA'}[S.mod];
+  const lab = `bit ${b} → ${desc}`; ctx.font = '700 12px "Segoe UI"'; const tw = ctx.measureText(lab).width+18;
+  rr(ctx, cx-tw/2, h-34, tw, 24, 12); ctx.fillStyle='rgba(8,12,30,.95)'; ctx.fill(); ctx.strokeStyle=c; ctx.stroke();
+  txt(ctx, lab, cx, h-22, {size:12, weight:700, align:'center', color:c});
+}
+
+// 4 · Campos E y B
+function d4(ctx,w,h,c,t,T){
+  header(ctx,w,'Onda electromagnética: campos E y B que avanzan a la velocidad de la luz',c);
+  const F = FREQS[S.freq], ax0 = 36, ax1 = w-30, ay = 162, lam = F.vis*2.8, k = 2*Math.PI/lam, ph = S.clock*4.5;
+  const A = x => 54*(1 - ((x-ax0)/(ax1-ax0))*(1-T.a));
+  // eje
+  ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1.3; ctx.beginPath(); ctx.moveTo(ax0,ay); ctx.lineTo(ax1,ay); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ax1,ay); ctx.lineTo(ax1-9,ay-5); ctx.lineTo(ax1-9,ay+5); ctx.closePath(); ctx.fillStyle='rgba(255,255,255,.5)'; ctx.fill();
+  txt(ctx,'dirección de propagación →', ax1-4, ay+64, {size:10.5, align:'right', color:'#9aa4d4'});
+  // plano de profundidad (B)
+  const dz = (z) => [-z*0.38, z*0.42];
+  // B primero (detrás)
+  for (let x=ax0; x<=ax1; x+=12){
+    const z = A(x)*0.75*Math.sin(k*(x-ax0) - ph), [dx,dy] = dz(z);
+    ctx.strokeStyle='rgba(96,165,250,.35)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,ay); ctx.lineTo(x+dx,ay+dy); ctx.stroke();
+  }
+  ctx.strokeStyle='#60a5fa'; ctx.lineWidth=2.4; ctx.shadowColor='#60a5fa'; ctx.shadowBlur=8; ctx.beginPath();
+  for (let x=ax0; x<=ax1; x+=2){ const z = A(x)*0.75*Math.sin(k*(x-ax0) - ph), [dx,dy] = dz(z); x===ax0 ? ctx.moveTo(x+dx,ay+dy) : ctx.lineTo(x+dx,ay+dy); }
+  ctx.stroke();
+  // E
+  for (let x=ax0; x<=ax1; x+=12){
+    const e = A(x)*Math.sin(k*(x-ax0) - ph);
+    ctx.shadowBlur=0; ctx.strokeStyle='rgba(251,146,60,.4)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,ay); ctx.lineTo(x,ay-e); ctx.stroke();
+  }
+  ctx.strokeStyle='#fb923c'; ctx.lineWidth=2.6; ctx.shadowColor='#fb923c'; ctx.shadowBlur=10; ctx.beginPath();
+  for (let x=ax0; x<=ax1; x+=2){ const e = A(x)*Math.sin(k*(x-ax0) - ph); x===ax0 ? ctx.moveTo(x,ay-e) : ctx.lineTo(x,ay-e); }
+  ctx.stroke(); ctx.shadowBlur=0;
+  txt(ctx,'━ E · campo eléctrico', w-18, 62, {size:11.5, weight:700, align:'right', color:'#fb923c'});
+  txt(ctx,'━ B · campo magnético', w-18, 80, {size:11.5, weight:700, align:'right', color:'#60a5fa'});
+  // λ entre dos crestas
+  let m = 0, xc; do { xc = ax0 + (Math.PI/2 + ph + 2*Math.PI*m)/k; m++; } while (xc < ax0 + 20);
+  while (xc - lam > ax0 + 20) xc -= lam;
+  if (xc + lam < ax1 - 10){
+    const yb = ay - A(xc) - 12;
+    ctx.strokeStyle='#fde68a'; ctx.lineWidth=1.3; ctx.beginPath(); ctx.moveTo(xc,yb+6); ctx.lineTo(xc,yb); ctx.lineTo(xc+lam,yb); ctx.lineTo(xc+lam,yb+6); ctx.stroke();
+    txt(ctx,`λ ≈ ${lamTxt(F.ghz)}`, xc+lam/2, yb-9, {size:11.5, weight:700, align:'center', color:'#fde68a'});
+  }
+  // fichas de datos
+  const LB = T.LB;
+  const chips = [
+    ['Velocidad', '300 000 km/s', '#f472b6'],
+    ['Frecuencia', F.label, '#fb923c'],
+    [`Tiempo en ${distTxt()}`, timeTxt(LB.secs), '#22d3ee'],
+    [S.ant === 'dish' ? 'Antenas parabólicas' : 'Antenas omni', `+${fmt(LB.g,0)} dB`, '#a78bfa'],
+    ['Señal que llega', LB.blocked ? '0 % ↩' : `${Math.round(T.a*100)} %`, T.a > .4 ? '#4ade80' : T.a > .22 ? '#fbbf24' : '#f87171'],
+  ];
+  if (w < 640) chips.shift();
+  const big = w >= 520, cols = big ? chips.length : 2, gap = 10, cw = (w-36-gap*(cols-1))/cols, chH = big ? 58 : 40;
+  chips.forEach((ch,i) => {
+    const cx = 18 + (i%cols)*(cw+gap), cy = h - (big ? 70 : 96) + Math.floor(i/cols)*(chH+6);
+    rr(ctx,cx,cy,cw,chH,10); ctx.fillStyle='rgba(255,255,255,.04)'; ctx.fill(); ctx.strokeStyle=hexA(ch[2],.45); ctx.lineWidth=1; ctx.stroke();
+    if (big){ txt(ctx,ch[0],cx+10,cy+17,{size:10.5,color:'#9aa4d4'}); txt(ctx,ch[1],cx+10,cy+39,{size: cw < 150 ? 14 : 17,weight:700,color:ch[2]}); }
+    else { txt(ctx,ch[0],cx+10,cy+chH/2,{size:10.5,color:'#9aa4d4'}); txt(ctx,ch[1],cx+cw-10,cy+chH/2,{size:13,weight:700,align:'right',color:ch[2]}); }
+  });
+}
+
+// 5 · Recepción
+function d5(ctx,w,h,c,t,T){
+  header(ctx,w,'La señal llega débil y con ruido: el receptor decide cada bit',c);
+  const x0 = 18, W = w-36, ppb = clamp(W/8, 50, 95), pos = t*1.4 - 2, yM = 128;
+  const rxN = T.rx.map(v => v / T.aR);   // amplificada (control automático de ganancia)
+  ctx.save(); ctx.beginPath(); ctx.rect(x0,52,W,h-60); ctx.clip();
+  bitWindow(T,pos,W,ppb,(idx,x) => {
+    const X = x0+x, err = T.rxBits[idx] !== T.bits[idx];
+    ctx.fillStyle = err ? 'rgba(248,113,113,.14)' : (idx%2 ? 'rgba(255,255,255,.02)' : 'rgba(255,255,255,.045)');
+    ctx.fillRect(X, 58, ppb, 150);
+    ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.beginPath(); ctx.moveTo(X,58); ctx.lineTo(X,240); ctx.stroke();
+    // decisión
+    rr(ctx, X+ppb*0.2, 214, ppb*0.6, 26, 7);
+    ctx.fillStyle = err ? 'rgba(248,113,113,.3)' : 'rgba(34,211,238,.14)'; ctx.fill();
+    ctx.strokeStyle = err ? '#f87171' : 'rgba(34,211,238,.5)'; ctx.stroke();
+    txt(ctx, String(T.rxBits[idx]), X+ppb/2, 227, {size:15, weight:700, align:'center', color: err ? '#f87171' : '#e8ecff', font:MONO});
+    if (err) txt(ctx, `(era ${T.bits[idx]})`, X+ppb/2, 250, {size:10, align:'center', color:'#f87171'});
+  });
+  ctx.restore();
+  drawSignal(ctx, T.sig, pos, x0, yM, W, 36, ppb, 'rgba(255,255,255,.35)', 1.4, [4,4]);
+  ctx.shadowColor = c; ctx.shadowBlur = 6;
+  drawSignal(ctx, rxN, pos, x0, yM, W, 36, ppb, c, 1.8);
+  ctx.shadowBlur = 0;
+  txt(ctx,'— recibida (amplificada)', w-18, 58, {size:10.5, align:'right', color:c, weight:700});
+  txt(ctx,'- - original', w-18, 74, {size:10.5, align:'right', color:'#9aa4d4'});
+  txt(ctx,'bits decididos ↓', x0+4, 204, {size:10.5, color:'#9aa4d4'});
+  // resumen global
+  const n = T.bits.length, cell = Math.min(6, (W-150)/n);
+  const sx = x0;
+  txt(ctx, `${n} bits · ${T.errors.length} errores`, w-18, h-16, {size:12, weight:700, align:'right', color: T.errors.length ? '#f87171' : '#4ade80'});
+  for (let i=0;i<n;i++){
+    ctx.fillStyle = T.rxBits[i] !== T.bits[i] ? '#f87171' : hexA(T.fields[T.bitField[i]].color,.55);
+    ctx.fillRect(sx + i*cell, h-24, Math.max(1,cell-1), 14);
+  }
+}
+
+// 6 · Verificación
+function d6(ctx,w,h,c,t,T){
+  header(ctx,w,`Comprobación de la trama recibida · intento ${S.attempt}`,c);
+  const x0 = 18, W = w-36, rb = T.rxBytes, len = T.len;
+  const rxVals = [rb[0], rb[1], rb[2], null, T.rxCk];
+  const minW = Math.min(70, W/6), raw = T.fields.map(f => f.bytes.length), tot = raw.reduce((a,b)=>a+b,0);
+  let widths = raw.map(r => Math.max(minW, W*r/tot)); const sc = W / widths.reduce((a,b)=>a+b,0); widths = widths.map(v=>v*sc);
+  let x = x0; const y = 62, k = ease(t/0.8);
+  ctx.globalAlpha = k;
+  T.fields.forEach((f,fi) => {
+    const fw = widths[fi];
+    const bad = fi===3 ? T.errors.some(e => e>=24 && e<24+len*8) : T.errors.some(e => {
+      const start = fi<3 ? fi*8 : (3+len)*8; return e>=start && e<start+8; });
+    rr(ctx,x+2,y,fw-4,46,8); ctx.fillStyle = hexA(bad ? '#f87171' : f.color, .16); ctx.fill();
+    ctx.strokeStyle = bad ? '#f87171' : f.color; ctx.lineWidth = 1.5; ctx.stroke();
+    txt(ctx, fw>80 ? f.label : f.short, x+fw/2, y+14, {size:11, weight:700, align:'center', color: bad ? '#f87171' : f.color});
+    let v = fi===3 ? (fw < 90 ? `${len} B` : `“${T.rxText}”`) : toHex(rxVals[fi]);
+    if (v.length*7.5 > fw-8) v = v.slice(0, Math.max(3, Math.floor((fw-8)/7.5)-1)) + '…';
+    txt(ctx, v, x+fw/2, y+32, {size:12, align:'center', font:MONO});
+    x += fw;
+  });
+  ctx.globalAlpha = 1;
+  const row = (i, label, val, good, delay) => {
+    const kk = ease((t-delay)/0.5); if (kk<=0) return;
+    ctx.globalAlpha = kk; const yy = 132 + i*30;
+    txt(ctx, label, x0+6, yy, {size:13, color:'#c7d0ff'});
+    txt(ctx, val, x0 + Math.min(330, W*0.62), yy, {size:13, font:MONO, color:'#fff'});
+    txt(ctx, good ? '✔' : '✘', w-30, yy, {size:17, weight:700, align:'center', color: good ? '#4ade80' : '#f87171'});
+    ctx.globalAlpha = 1;
+  };
+  const preErr = toBin(rb[0] ^ PRE).split('').filter(ch => ch === '1').length;
+  row(0, '¿Preámbulo detectado?', toBin(rb[0]) + (preErr ? `  (${preErr} bit${preErr>1?'s':''} alterado${preErr>1?'s':''})` : ''), preErr <= 2, 1.0);
+  row(1, '¿La dirección destino es la mía?', `${toHex(rb[1])} ${T.dstOk ? '=' : '≠'} ${toHex(DST)}`, T.dstOk, 1.6);
+  row(2, 'Control calculado vs. recibido', `${toHex(T.calcCk)} ${T.calcCk === T.rxCk ? '=' : '≠'} ${toHex(T.rxCk)}`, T.calcCk === T.rxCk, 2.3);
+  if (t > 3.2){
+    const kk = ease((t-3.2)/0.5), yy = h-58, good = T.ok;
+    ctx.globalAlpha = kk; ctx.save(); ctx.shadowColor = good ? '#4ade80' : '#f87171'; ctx.shadowBlur = 20;
+    rr(ctx, x0, yy, W, 44, 12); ctx.fillStyle = good ? 'rgba(74,222,128,.15)' : 'rgba(248,113,113,.15)'; ctx.fill();
+    ctx.strokeStyle = good ? '#4ade80' : '#f87171'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
+    txt(ctx, good ? '✔ TRAMA CORRECTA → se responde con ACK' : '✘ TRAMA DAÑADA → se descarta y se pide retransmisión', w/2, yy+22,
+        {size:w<520?12:14, weight:700, align:'center', color: good ? '#4ade80' : '#f87171'});
+    ctx.globalAlpha = 1;
+  }
+}
+
+// 7 · Entrega
+function d7(ctx,w,h,c,t,T){
+  header(ctx,w,'Los bytes vuelven a ser caracteres y la app muestra el mensaje',c);
+  const units = T.data.length, uw = Math.min(56, (w-36)/units);
+  let x = (w - uw*units)/2;
+  T.rxChars.forEach((rc,ci) => {
+    const k = ease((t - 0.2 - ci*0.25)/0.5), cw = uw*rc.bytes.length;
+    if (k > 0){
+      ctx.globalAlpha = k;
+      rc.bytes.forEach((b,j) => txt(ctx, toHex(b), x+j*uw+uw/2, 64, {size:uw<40?9:11, align:'center', color:'#7dd3fc', font:MONO}));
+      txt(ctx, '↓', x+cw/2, 84, {size:13, align:'center', color:'#6d78ad'});
+      rr(ctx, x+3, 96, cw-6, 38, 8); ctx.fillStyle = rc.bad ? 'rgba(248,113,113,.2)' : hexA(c,.15); ctx.fill();
+      ctx.strokeStyle = rc.bad ? '#f87171' : hexA(c,.6); ctx.lineWidth=1.2; ctx.stroke();
+      txt(ctx, rc.ch === ' ' ? '␣' : rc.ch, x+cw/2, 116, {size:20, weight:700, align:'center', color: rc.bad ? '#f87171' : '#fff'});
+      ctx.globalAlpha = 1;
+    }
+    x += cw;
+  });
+  if (t > 2.6){
+    const k = ease((t-2.6)/0.6), pw = Math.min(380, w-40), px = (w-pw)/2, py = 152 + (1-k)*20;
+    ctx.globalAlpha = k;
+    rr(ctx,px,py,pw,h-py-12,16); ctx.fillStyle='#0a1029'; ctx.fill(); ctx.strokeStyle='#2b3a78'; ctx.lineWidth=2; ctx.stroke();
+    txt(ctx,`💬  Nuevo mensaje de: ${devName('tx')}`,px+16,py+20,{size:12.5,weight:600,color:'#cfc4ff'});
+    ctx.font = '600 20px "Segoe UI"'; const bw = Math.min(pw-40, ctx.measureText(T.rxText).width + 34);
+    rr(ctx,px+16,py+36,bw,42,16); ctx.fillStyle = T.ok ? '#243463' : 'rgba(248,113,113,.25)'; ctx.fill();
+    txt(ctx,T.rxText,px+16+bw/2,py+57,{size:20,weight:600,align:'center',color:'#fff'});
+    txt(ctx, T.ok ? '✔ recibido correctamente' : '⚠ datos dañados (no se entregaría)', px+pw-14, py+57, {size:11.5, align:'right', color: T.ok ? '#4ade80' : '#f87171'});
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* =====================================================================
+   ESPECTRO ELECTROMAGNÉTICO (escala logarítmica de 10 kHz a 10²¹ Hz)
+   ===================================================================== */
+const SPEC = [
+  {f0:1e4,    f1:3e8,    color:'#f472b6', name:'Ondas de radio', short:'Radio', icon:'📻',
+   range:'< 300 MHz · λ > 1 m',
+   uses:'Radio AM y FM, televisión, walkie-talkies, radioaficionados, etiquetas RFID.',
+   beh:'Atraviesan paredes y rodean los obstáculos. Las más bajas rebotan en la ionosfera y pueden dar la vuelta al mundo.',
+   walls:'Atraviesa paredes: sí', ion:'Ionizante: no'},
+  {f0:3e8,    f1:3e11,   color:'#f59e0b', name:'Microondas', short:'Micro.', icon:'📶',
+   range:'300 MHz – 300 GHz · λ 1 m – 1 mm',
+   uses:'Wi-Fi, Bluetooth, telefonía móvil (4G/5G), GPS, satélites, radar y el horno microondas.',
+   beh:'Atraviesan paredes, pero peor cuanto mayor es la frecuencia. Con antenas parabólicas forman haces muy estrechos.',
+   walls:'Atraviesa paredes: sí, debilitándose', ion:'Ionizante: no'},
+  {f0:3e11,   f1:4e14,   color:'#dc2626', name:'Infrarrojo', short:'IR', icon:'🔥',
+   range:'300 GHz – 400 THz · λ 1 mm – 750 nm',
+   uses:'Mandos a distancia, cámaras térmicas, sensores de presencia y fibra óptica. Todo cuerpo caliente emite infrarrojos.',
+   beh:'Lo sentimos como calor. No atraviesa paredes: por eso el mando tiene que “ver” la tele.',
+   walls:'Atraviesa paredes: no', ion:'Ionizante: no'},
+  {f0:4e14,   f1:7.5e14, color:'#facc15', name:'Luz visible', short:'', icon:'🌈',
+   range:'400 – 750 THz · λ 750 – 400 nm',
+   uses:'Lo único que ven nuestros ojos: del rojo (menos frecuencia) al violeta (más). También se usa en fibra óptica y Li-Fi.',
+   beh:'Viaja en línea recta, la bloquea cualquier objeto opaco y se refleja en los espejos. ¡Es una franja diminuta del espectro!',
+   walls:'Atraviesa paredes: no', ion:'Ionizante: no'},
+  {f0:7.5e14, f1:3e16,   color:'#8b5cf6', name:'Ultravioleta', short:'UV', icon:'☀️',
+   range:'750 THz – 30 PHz · λ 400 – 10 nm',
+   uses:'Llega del Sol: broncea y quema la piel. Se usa para esterilizar, en luces de discoteca y para detectar billetes falsos.',
+   beh:'La capa de ozono filtra la mayor parte. A partir de aquí las ondas empiezan a tener energía para dañar las células.',
+   walls:'Atraviesa paredes: no', ion:'Ionizante: las más energéticas'},
+  {f0:3e16,   f1:3e19,   color:'#3b82f6', name:'Rayos X', short:'X', icon:'🦴',
+   range:'30 PHz – 30 EHz · λ 10 – 0,01 nm',
+   uses:'Radiografías, escáneres médicos (TAC) y control de equipajes en los aeropuertos.',
+   beh:'Atraviesan la piel y los músculos, pero no los huesos ni el plomo: por eso en la radiografía se ven los huesos.',
+   walls:'Atraviesa materiales: sí (no el plomo)', ion:'Ionizante: sí'},
+  {f0:3e19,   f1:1e21,   color:'#10b981', name:'Rayos gamma', short:'γ', icon:'☢️',
+   range:'> 30 EHz · λ < 0,01 nm',
+   uses:'Materiales radiactivos, explosiones de estrellas, radioterapia contra el cáncer y esterilización de material médico.',
+   beh:'Las ondas más energéticas: lo atraviesan casi todo y hacen falta gruesas capas de plomo u hormigón para frenarlas.',
+   walls:'Atraviesa materiales: casi todos', ion:'Ionizante: sí, muy peligrosos'},
+];
+const SPEC_OBJ = [
+  {lam:100,   t:'100 m',  e:'🏟️', n:'estadio'},
+  {lam:1,     t:'1 m',    e:'🧍', n:'persona'},
+  {lam:0.01,  t:'1 cm',   e:'🐜', n:'hormiga'},
+  {lam:1e-4,  t:'0,1 mm', e:'💇', n:'un pelo'},
+  {lam:1e-6,  t:'1 µm',   e:'🦠', n:'bacteria'},
+  {lam:1e-8,  t:'10 nm',  e:'🔬', n:'virus'},
+  {lam:1e-10, t:'0,1 nm', e:'⚛️', n:'átomo'},
+];
+const SPEC_MIN = 4, SPEC_MAX = 21, F_ION = 2.4e15;
+const specC = $('#spec');
+let specHover = null, specKey = '', specGeo = {x0:16, W:100};
+const specRegionOf = f => { if (f < SPEC[0].f0) return 0; const i = SPEC.findIndex(r => f >= r.f0 && f < r.f1); return i < 0 ? SPEC.length-1 : i; };
+
+function drawSpectrum(){
+  const {ctx,w,h} = setupCanvas(specC), x0 = 16, W = w - 32;
+  specGeo = {x0, W};
+  const X = f => x0 + (Math.log10(f) - SPEC_MIN) / (SPEC_MAX - SPEC_MIN) * W;
+  const F = FREQS[S.freq], fSig = F.ghz*1e9, cur = specRegionOf(fSig);
+  const yB = 92, hB = 40;
+
+  // eje de frecuencias
+  [[1e4,'10 kHz'],[1e7,'10 MHz'],[1e10,'10 GHz'],[1e13,'10 THz'],[1e16,'10¹⁶ Hz']].forEach(([f,l]) => {
+    const x = X(f);
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x,24); ctx.lineTo(x,30); ctx.stroke();
+    txt(ctx, l, x, 14, {size:11, align: f===1e4 ? 'left' : 'center', color:'#8e98c6', font:MONO});
+  });
+  txt(ctx, W > 600 ? 'más frecuencia y más energía →' : 'más energía →', x0+W, 14, {size:11, align:'right', color:'#6d78ad'});
+
+  // onda cuya longitud se acorta hacia la derecha
+  const grad = ctx.createLinearGradient(x0,0,x0+W,0);
+  SPEC.forEach(r => grad.addColorStop(clamp((X(Math.sqrt(r.f0*r.f1)) - x0)/W, 0, 1), r.color));
+  ctx.strokeStyle = grad; ctx.lineWidth = 1.8; ctx.beginPath();
+  const kScale = Math.log(25), sh = S.clock*6;
+  for (let x=0; x<=W; x+=0.5){
+    const ph = 2*Math.PI/110 * W/kScale * (Math.exp(kScale*x/W) - 1);
+    const y = 54 + 15*Math.sin(ph - sh);
+    x === 0 ? ctx.moveTo(x0+x,y) : ctx.lineTo(x0+x,y);
+  }
+  ctx.stroke();
+
+  // franjas del espectro
+  SPEC.forEach((r,i) => {
+    const a = X(r.f0), b = X(r.f1), hov = specHover === i, isCur = cur === i;
+    if (i === 3){
+      const vg = ctx.createLinearGradient(a,0,b,0);
+      ['#ef4444','#f97316','#facc15','#22c55e','#3b82f6','#8b5cf6'].forEach((c,j,arr) => vg.addColorStop(j/(arr.length-1), c));
+      ctx.fillStyle = vg; ctx.globalAlpha = 1;
+    } else { ctx.fillStyle = r.color; ctx.globalAlpha = hov ? 0.85 : isCur ? 0.6 : 0.4; }
+    ctx.fillRect(a, yB, b-a, hB); ctx.globalAlpha = 1;
+    if (hov){ ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(a+1, yB+1, b-a-2, hB-2); }
+    ctx.font = '700 12.5px "Segoe UI"';
+    const label = ctx.measureText(r.name).width < b-a-8 ? r.name : r.short;
+    if (label && ctx.measureText(label).width < b-a-4) txt(ctx, label, (a+b)/2, yB+hB/2, {size:12.5, weight:700, align:'center', color:'#fff'});
+  });
+  rr(ctx, x0, yB, W, hB, 6); ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.stroke();
+
+  // aviso de la luz visible
+  const xv = (X(4e14) + X(7.5e14))/2;
+  txt(ctx, '👁 luz visible', xv, 80, {size:11, weight:700, align:'center', color:'#fde68a'});
+  ctx.strokeStyle = '#fde68a'; ctx.beginPath(); ctx.moveTo(xv, 86); ctx.lineTo(xv, yB-1); ctx.stroke();
+
+  // límite ionizante
+  const xi = X(F_ION);
+  ctx.setLineDash([4,4]); ctx.strokeStyle = 'rgba(248,113,113,.8)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(xi, yB-4); ctx.lineTo(xi, 184); ctx.stroke(); ctx.setLineDash([]);
+  txt(ctx, '← no ionizantes', xi-8, 176, {size:11.5, weight:600, align:'right', color:'#4ade80'});
+  txt(ctx, W > 600 ? 'ionizantes (dañan las células) →' : 'ionizantes →', xi+8, 176, {size:11.5, weight:600, align:'left', color:'#f87171'});
+
+  // marcador de la señal del simulador
+  const xs = X(fSig);
+  ctx.save(); ctx.shadowColor = '#fff'; ctx.shadowBlur = 10 + 6*Math.sin(S.clock*4);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(xs, yB-6); ctx.lineTo(xs, yB+hB+6); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(xs-6, yB-12); ctx.lineTo(xs+6, yB-12); ctx.lineTo(xs, yB-4); ctx.fill();
+  const lab = `📡 Señal del simulador: ${F.label}`;
+  ctx.font = '700 12px "Segoe UI"'; const tw = ctx.measureText(lab).width + 18;
+  const bx = clamp(xs - tw/2, x0, x0 + W - tw);
+  rr(ctx, bx, yB+hB+10, tw, 24, 12); ctx.fillStyle = 'rgba(8,12,30,.95)'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.stroke();
+  txt(ctx, lab, bx + tw/2, yB+hB+22, {size:12, weight:700, align:'center', color:'#fff'});
+
+  // longitudes de onda comparadas con objetos
+  txt(ctx, 'λ ≈', x0, 206, {size:11, weight:700, color:'#6d78ad'});
+  SPEC_OBJ.forEach(o => {
+    const x = X(3e8 / o.lam);
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x,192); ctx.lineTo(x,197); ctx.stroke();
+    txt(ctx, o.t, x, 206, {size:11, align:'center', color:'#c7d0ff', font:MONO});
+    txt(ctx, o.e, x, 228, {size:17, align:'center'});
+    txt(ctx, o.n, x, 250, {size:10.5, align:'center', color:'#8e98c6'});
+  });
+}
+function renderSpecInfo(){
+  const F = FREQS[S.freq], cur = specRegionOf(F.ghz*1e9), idx = specHover ?? cur;
+  const key = idx + '|' + S.freq; if (key === specKey) return; specKey = key;
+  const r = SPEC[idx], el = $('#specInfo');
+  el.style.setProperty('--c', r.color);
+  const note = idx === cur
+    ? `📡 Aquí está la señal del simulador: ${F.label} (λ ≈ ${lamTxt(F.ghz)})`
+    : `📡 La señal del simulador (${F.label}) está en: ${SPEC[cur].name.toLowerCase()}`;
+  el.innerHTML = `<div class="si-top"><span class="si-icon">${r.icon}</span><div><h4>${r.name}</h4><div class="si-range">${r.range}</div></div></div>
+    <p><b>Usos:</b> ${r.uses}</p><p>${r.beh}</p>
+    <div class="si-props"><span>${r.walls}</span><span>${r.ion}</span></div>
+    <div class="si-note">${note}</div>`;
+}
+function specPointer(e){
+  const rc = specC.getBoundingClientRect(), x = e.clientX - rc.left, {x0, W} = specGeo;
+  specHover = (x < x0 || x > x0 + W) ? null : specRegionOf(10 ** (SPEC_MIN + (x - x0)/W*(SPEC_MAX - SPEC_MIN)));
+}
+specC.addEventListener('mousemove', specPointer);
+specC.addEventListener('click', specPointer);
+specC.addEventListener('mouseleave', () => { specHover = null; });
+
+/* =====================================================================
+   BUCLE DE ANIMACIÓN
+   ===================================================================== */
+let last = performance.now();
+function loop(now){
+  requestAnimationFrame(loop);                    // se programa primero: un fallo de dibujo no detiene la animación
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
+  S.clock += dt;
+  if (S.playing || S.t < DUR[S.stage]) S.t += dt*S.speed;   // la animación del paso se completa aunque esté en pausa
+  if (S.playing && S.t >= DUR[S.stage]){
+    if (S.stage === 6 && !S.tx.ok && S.attempt < 3) retransmit();
+    else if (S.stage < 7) goStage(S.stage + 1);
+    else setPlaying(false);
+  }
+  const bar = stepper.children[S.stage].querySelector('.bar');
+  bar.style.width = (clamp(S.t/DUR[S.stage],0,1)*100) + '%';
+  drawScene(); drawDetail(); drawSpectrum(); renderSpecInfo();
+}
+
+refreshLabels(); compute(); goStage(0); renderSpecInfo();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
