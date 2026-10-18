@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Laboratorio de Cable de Cobre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0a1316;
+    --panel:#0f1d21;
+    --panel-2:#13262b;
+    --line:#1f3a40;
+    --text:#e4efe9;
+    --muted:#8aa8a0;
+    --copper:#e08f4f;
+    --signal:#57d6e0;
+    --rx:#9cc4ff;
+    --pair2:#3fae5c;
+    --noise:#ee5d8a;
+    --warn:#f0c052;
+    --ok:#6fd28f;
+    --err:#ff5c5c;
+    --display:"Chakra Petch", "Segoe UI", system-ui, sans-serif;
+    --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 500px at 15% -10%, rgba(224,143,79,.10), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(87,214,224,.08), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font:15px/1.55 var(--body);
+    padding-inline:16px;
+    padding-block:20px 40px;
+    min-height:100vh;
+  }
+  .wrap{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+
+  /* ---------- cabecera ---------- */
+  .top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--copper)}
+  h1{font:700 clamp(28px,4.4vw,44px)/1.05 var(--display);margin:8px 0 8px;letter-spacing:.01em;text-wrap:balance}
+  h1 span{color:var(--copper)}
+  .lede{margin:0;color:var(--muted);max-width:68ch}
+  .status{
+    display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:999px;
+    border:1px solid var(--line);background:var(--panel);font:600 14px/1 var(--mono);white-space:nowrap
+  }
+  .status .dot{width:12px;height:12px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok)}
+  .status[data-s="deg"] .dot{background:var(--warn);box-shadow:0 0 12px var(--warn)}
+  .status[data-s="bad"] .dot{background:#ff8a4c;box-shadow:0 0 12px #ff8a4c}
+  .status[data-s="down"] .dot{background:var(--err);box-shadow:0 0 14px var(--err);animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.25}}
+
+  /* ---------- rejilla ---------- */
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .panel-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
+  h2{font:600 17px/1.2 var(--display);margin:0;letter-spacing:.04em;text-transform:uppercase}
+  .hint{font:500 12px/1.3 var(--mono);color:var(--muted)}
+  .stage{display:flex;flex-direction:column;gap:14px}
+  .canvas-wrap{position:relative;border-radius:10px;overflow:hidden;background:#081013;border:1px solid var(--line)}
+  canvas{display:block;width:100%}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font:500 12px/1 var(--mono);color:var(--muted)}
+  .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+  .metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+  .metric{background:var(--panel-2);border-radius:10px;padding:10px 12px}
+  .metric .k{font:500 11px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .metric .v{font:600 22px/1.2 var(--mono);font-variant-numeric:tabular-nums;margin-top:4px}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:500}
+  .metric.warn .v{color:var(--warn)} .metric.bad .v{color:var(--err)}
+
+  /* ---------- controles ---------- */
+  .side{display:flex;flex-direction:column;gap:18px}
+  .ctrl{display:flex;flex-direction:column;gap:6px;padding-block:10px;border-top:1px solid var(--line)}
+  .ctrl:first-of-type{border-top:0;padding-top:0}
+  .ctrl label.t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:600}
+  .ctrl label.t output{font:600 14px var(--mono);color:var(--copper);font-variant-numeric:tabular-nums}
+  .ctrl .sub{font-size:12.5px;color:var(--muted);line-height:1.4}
+  input[type=range]{width:100%;accent-color:var(--copper);height:22px}
+  input[type=range]#emi,input[type=range]#rfi{accent-color:var(--noise)}
+  .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg input{position:absolute;opacity:0;pointer-events:none}
+  .seg label{text-align:center;padding:8px 6px;font:600 13px/1 var(--mono);cursor:pointer;color:var(--muted);background:var(--panel-2)}
+  .seg label + input + label{border-left:1px solid var(--line)}
+  .seg input:checked + label{background:var(--copper);color:#1a0f06}
+  .seg input:focus-visible + label{outline:2px solid var(--signal);outline-offset:-2px}
+  .switch{display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600}
+  .switch input{width:18px;height:18px;accent-color:var(--copper)}
+  .btns{display:flex;flex-wrap:wrap;gap:8px}
+  button{
+    font:600 13px/1 var(--mono);color:var(--text);background:var(--panel-2);border:1px solid var(--line);
+    border-radius:9px;padding:10px 12px;cursor:pointer;transition:border-color .15s, background .15s
+  }
+  button:hover{border-color:var(--copper)}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+  button.primary{background:var(--copper);color:#1a0f06;border-color:var(--copper)}
+  button.primary:hover{background:#eaa066}
+  .scen{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:8px}
+  .scen button{text-align:left;line-height:1.25;padding:9px 10px;font-family:var(--body);font-weight:500;font-size:13px}
+  .scen button b{display:block;font:700 16px var(--mono);color:var(--copper);margin-bottom:2px}
+  .scen button[aria-pressed="true"]{border-color:var(--copper);background:rgba(224,143,79,.16)}
+  .scdesc{margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--panel-2);font-size:14px;line-height:1.5;
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 24px;align-items:start}
+  .scdesc h3{grid-column:1/-1;font:600 15px/1.3 var(--display);margin:0;color:var(--copper);letter-spacing:.02em}
+  .scdesc p{margin:0}
+  .scdesc .q{padding-left:16px;border-left:1px dashed var(--line)}
+  .scdesc .q b{display:block;font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--signal);margin-bottom:3px}
+  .pie{text-align:center;font:500 12.5px var(--mono);color:var(--muted);letter-spacing:.06em;padding-top:6px}
+
+  /* ---------- explicación y registro ---------- */
+  .lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+  .explain h3{font:600 20px/1.25 var(--display);margin:2px 0 6px;text-wrap:balance}
+  .explain p{margin:0 0 14px;color:#c8d9d3;max-width:65ch}
+  .budget{display:flex;flex-direction:column;gap:8px}
+  .brow{display:grid;grid-template-columns:130px minmax(0,1fr) 52px;align-items:center;gap:10px;font-size:13px}
+  .brow .track{height:10px;background:var(--panel-2);border-radius:6px;overflow:hidden}
+  .brow .track i{display:block;height:100%;width:0;border-radius:6px;transition:width .35s ease}
+  .brow .num{font:500 12px var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+  .foot{font-size:12px;color:var(--muted);margin-top:10px}
+
+  .log ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;padding-right:4px}
+  .log li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;padding:10px 12px;background:var(--panel-2);border-radius:10px;font-size:13.5px;line-height:1.45;animation:in .35s ease}
+  .log li time{grid-column:1/-1;font:500 11px var(--mono);color:var(--muted)}
+  .tag{font:600 10.5px/1 var(--mono);letter-spacing:.06em;padding:4px 6px;border-radius:5px;height:max-content;margin-top:2px;background:var(--line);color:var(--text)}
+  .tag.emi,.tag.rfi{background:rgba(238,93,138,.18);color:var(--noise)}
+  .tag.next{background:rgba(111,210,143,.16);color:var(--ok)}
+  .tag.dist{background:rgba(224,143,79,.18);color:var(--copper)}
+  .tag.trama{background:rgba(255,92,92,.16);color:var(--err)}
+  .tag.enlace{background:rgba(240,192,82,.16);color:var(--warn)}
+  .tag.guia{background:rgba(87,214,224,.16);color:var(--signal)}
+  @keyframes in{from{opacity:.3;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  @media (max-width:1020px){
+    .grid{grid-template-columns:minmax(0,1fr)}
+    .scen{grid-template-columns:repeat(5,minmax(0,1fr))}
+    .lower{grid-template-columns:minmax(0,1fr)}
+  }
+  @media (max-width:720px){
+    .scen{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .scdesc{grid-template-columns:minmax(0,1fr)}
+    .scdesc .q{padding-left:0;border-left:0;padding-top:10px;border-top:1px dashed var(--line)}
+    .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .brow{grid-template-columns:100px minmax(0,1fr) 44px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .log li{animation:none} .status[data-s="down"] .dot{animation:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Redes locales · Capa física · Par trenzado</div>
+      <h1>Laboratorio de <span>cable de cobre</span></h1>
+      <p class="lede">Un switch envía bits a un PC por un cable Ethernet. Cambia la distancia, añade interferencias electromagnéticas (EMI/RFI) o diafonía (crosstalk) y observa cómo se degrada la señal y cuándo empiezan a perderse tramas.</p>
+    </div>
+    <div class="status" id="status" data-s="ok" role="status"><span class="dot"></span><span id="statusText">Enlace OK</span></div>
+  </header>
+
+  <section class="panel scenbar" aria-label="Escenarios">
+    <div class="panel-head"><h2>Escenarios</h2><span class="hint">Elige uno</span></div>
+    <div class="scen" id="scen"></div>
+    <div class="scdesc" id="scDesc" aria-live="polite"><p class="hint">Selecciona un escenario para empezar, o cambia los controles libremente.</p></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel stage" aria-label="Simulación">
+      <div>
+        <div class="panel-head">
+          <h2>El cable</h2>
+          <span class="hint">Par naranja: datos Switch → PC · Par verde: tráfico del par vecino</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="cable" aria-label="Animación del cable con los pulsos de señal y las fuentes de interferencia"></canvas>
+        </div>
+      </div>
+      <div>
+        <div class="panel-head">
+          <h2>Osciloscopio</h2>
+          <div class="legend">
+            <span><i style="background:var(--copper)"></i>Par naranja · enviado</span>
+            <span><i style="background:var(--pair2)"></i>Par verde · vecino</span>
+            <span><i style="background:var(--rx)"></i>Par naranja · recibido</span>
+            <span><i style="background:var(--noise)"></i>Ruido</span>
+            <span><i style="background:#fff"></i>Bit correcto</span>
+            <span><i style="background:var(--err)"></i>Bit erróneo</span>
+          </div>
+        </div>
+        <div class="canvas-wrap"><canvas id="scope" aria-label="Osciloscopio con la señal enviada, la del par vecino y la recibida"></canvas></div>
+      </div>
+      <div class="metrics">
+        <div class="metric" id="mLen"><div class="k">Longitud</div><div class="v"><span id="vLen">15</span> <small>m</small></div></div>
+        <div class="metric" id="mAtt"><div class="k">Atenuación</div><div class="v"><span id="vAtt">3.3</span> <small>dB</small></div></div>
+        <div class="metric" id="mSnr"><div class="k">Relación S/R</div><div class="v"><span id="vSnr">40</span> <small>dB</small></div></div>
+        <div class="metric" id="mBer"><div class="k">Bits erróneos</div><div class="v"><span id="vBer">0.0</span> <small>%</small></div></div>
+        <div class="metric" id="mFr"><div class="k">Tramas ok / perdidas</div><div class="v"><span id="vFok">0</span><small> / </small><span id="vFbad">0</span></div></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="panel" aria-label="Controles">
+        <div class="panel-head"><h2>Controles</h2>
+          <div class="btns"><button id="pause" type="button">Pausa</button><button id="resetc" type="button">Reiniciar</button></div>
+        </div>
+
+        <div class="ctrl">
+          <label class="t" for="speed">Velocidad de los bits <output id="oSpeed">4 bits/s</output></label>
+          <input type="range" id="speed" min="1" max="20" step="1" value="4">
+          <div class="sub">Cámara lenta: una red real envía millones de bits por segundo (100 Mb/s, 1 Gb/s…).</div>
+        </div>
+
+        <div class="ctrl">
+          <label class="t" for="len">Distancia del cable <output id="oLen">15 m</output></label>
+          <input type="range" id="len" min="1" max="150" step="1" value="15">
+          <div class="sub">La norma Ethernet (TIA/EIA-568, ISO 11801) limita el enlace de cobre a 100 m.</div>
+        </div>
+
+        <div class="ctrl">
+          <label class="t" for="emi">EMI · motor cercano <output id="oEmi">0 %</output></label>
+          <input type="range" id="emi" min="0" max="100" step="5" value="0">
+          <div class="sub">Motores, fluorescentes, cables de corriente, ascensores…</div>
+        </div>
+
+        <div class="ctrl">
+          <label class="t" for="rfi">RFI · antena de radio <output id="oRfi">0 %</output></label>
+          <input type="range" id="rfi" min="0" max="100" step="5" value="0">
+          <div class="sub">Emisoras, walkies, antenas de telefonía: EMI de alta frecuencia.</div>
+        </div>
+
+        <div class="ctrl">
+          <label class="switch" for="xtalk"><input type="checkbox" id="xtalk" checked> Tráfico en el par vecino (diafonía)</label>
+          <div class="sub">El par verde transmite en sentido contrario, junto al receptor del PC.</div>
+        </div>
+
+        <div class="ctrl">
+          <span class="t" style="font-weight:600">Estado de los pares</span>
+          <div class="seg" role="radiogroup" aria-label="Estado de los pares">
+            <input type="radio" name="tw" id="twOn" value="1" checked><label for="twOn">Trenzados</label>
+            <input type="radio" name="tw" id="twOff" value="0"><label for="twOff">Destrenzados</label>
+          </div>
+        </div>
+
+        <div class="ctrl">
+          <span class="t" style="font-weight:600">Tipo de cable</span>
+          <div class="seg" role="radiogroup" aria-label="Tipo de cable">
+            <input type="radio" name="sh" id="shU" value="UTP" checked><label for="shU">UTP</label>
+            <input type="radio" name="sh" id="shF" value="FTP"><label for="shF">FTP</label>
+            <input type="radio" name="sh" id="shS" value="SFTP"><label for="shS">S/FTP</label>
+          </div>
+          <div class="sub">UTP sin pantalla · FTP lámina global · S/FTP lámina por par + malla.</div>
+        </div>
+      </section>
+
+    </aside>
+  </div>
+
+  <div class="lower">
+    <section class="panel explain">
+      <div class="panel-head"><h2>Medidas en el receptor</h2><span class="hint">Se actualiza con la simulación</span></div>
+      <div class="budget" id="budget"></div>
+      <div class="foot">Amplitud de la señal útil en el instante de lectura y pico de cada fuente de ruido, medidos tras el amplificador del receptor (en voltios relativos).</div>
+    </section>
+
+    <section class="panel log">
+      <div class="panel-head"><h2>Registro de eventos</h2><button type="button" id="clearLog">Limpiar</button></div>
+      <ol id="log"></ol>
+    </section>
+  </div>
+
+  <footer class="pie">Vicent Valls 2026</footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = s => document.querySelector(s);
+
+  /* ================= MODELO ================= */
+  const st = { speed: 4, len: 15, emi: 0, rfi: 0, xtalk: true, twisted: true, shield: "UTP", running: true };
+  const DB_PER_M = 0.22;      // atenuación aprox. Cat 5e a 100 MHz (≈22 dB/100 m)
+  const MAX_GAIN_DB = 22;     // lo que el ecualizador del receptor puede compensar
+  const SPB = 10;             // muestras por bit
+  const N = 520;              // muestras visibles en el osciloscopio
+  const SHIELD = { UTP: { emi: 1, xt: 1 }, FTP: { emi: 0.3, xt: 0.6 }, SFTP: { emi: 0.08, xt: 0.15 } };
+  const SHIELD_NAME = { UTP: "UTP", FTP: "FTP", SFTP: "S/FTP" };
+
+  let M = model();
+  function model() {
+    const dB = st.len * DB_PER_M;
+    const Araw = Math.pow(10, -dB / 20);
+    const G = Math.pow(10, Math.min(dB, MAX_GAIN_DB) / 20);
+    const alpha = Math.min(0.95, 0.95 * Math.exp(-st.len / 45));
+    const reach = 1 - Math.pow(1 - alpha, SPB);
+    const tw = st.twisted ? 0.3 : 1;
+    const sh = SHIELD[st.shield];
+    const kE = 0.7 * (st.emi / 100) * sh.emi * tw;
+    const kR = 0.6 * (st.rfi / 100) * sh.emi * tw;
+    const kX = st.xtalk ? 0.15 * (st.twisted ? 0.2 : 1) * sh.xt : 0;
+    const sig = Araw * G;
+    const eye = sig * reach;
+    const emiP = kE * G * 2.0, rfiP = kR * G, xtP = kX * G * 0.51, thP = 0.004 * G * 3;
+    const rms = Math.sqrt((kE * G * 0.8) ** 2 + (kR * G * 0.7) ** 2 + (xtP * 0.5) ** 2 + (0.004 * G) ** 2);
+    const snr = Math.min(60, 20 * Math.log10(eye / Math.max(rms, 1e-5)));
+    return { dB, Araw, G, alpha, reach, kE, kR, kX, sig, eye, emiP, rfiP, xtP, thP, snr };
+  }
+
+  function gauss() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  /* ================= SIMULADOR DE SEÑAL ================= */
+  const txB = new Float32Array(N), rxB = new Float32Array(N), nzB = new Float32Array(N), agB = new Float32Array(N), agE = new Int8Array(N), mk = new Int8Array(N);
+  let wi = 0;
+  const sim = {
+    n: 0, y: 0, bit: 1, abit: 1, aPrev: 1, xt: 0, burst: 0, rfPh: 0,
+    win: new Int8Array(200), wN: 0, wErr: 0, wPos: 0,
+    fBits: 0, fErr: false, fOk: 0, fBad: 0, fId: 0, errFlash: 0
+  };
+  const parts = [], aparts = [], sparks = [];
+
+  function step() {
+    const s = sim, m = M;
+    const ph = s.n % SPB;
+    if (ph === 0) {
+      s.bit = Math.random() < 0.5 ? 1 : -1;
+      parts.push({ p: 0, v: s.bit });
+    }
+    if ((s.n + 4) % SPB === 0) {
+      s.abit = Math.random() < 0.5 ? 1 : -1;
+      if (st.xtalk) aparts.push({ p: 0 });
+    }
+    const tx = s.bit;
+    s.y += (tx - s.y) * m.alpha;                         // el cable redondea los flancos
+    const d = s.abit - s.aPrev; s.aPrev = s.abit;
+    s.xt = s.xt * 0.8 + d * 0.5;                          // NEXT: picos en cada flanco del vecino
+    if (d !== 0 && st.xtalk && Math.random() < 0.6) sparks.push({ x: 0.74 + Math.random() * 0.24, life: 1 });
+    if (Math.random() < 0.004 + 0.02 * st.emi / 100) s.burst = (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random() * 1.5);
+    s.burst *= 0.82;
+    const emi = 0.7 * Math.sin(s.n * 0.035) + s.burst;   // zumbido de red + chispas del motor
+    s.rfPh += 1.3;
+    const rfi = Math.sin(s.rfPh) * (0.6 + 0.4 * Math.sin(s.n * 0.013));
+    const noise = emi * m.kE + rfi * m.kR + s.xt * m.kX + gauss() * 0.004;
+    const rx = (s.y * m.Araw + noise) * m.G;             // el receptor amplifica señal Y ruido
+
+    txB[wi] = tx; rxB[wi] = rx; nzB[wi] = noise * m.G; mk[wi] = 0;
+    agB[wi] = st.xtalk ? s.abit : 0; agE[wi] = st.xtalk && d !== 0 ? 1 : 0;
+
+    if (ph === SPB - 1) {                                 // instante de decisión
+      const ok = (rx > 0) === (tx > 0);
+      mk[wi] = ok ? 1 : 2;
+      const old = s.win[s.wPos];
+      if (s.wN === s.win.length) s.wErr -= old; else s.wN++;
+      s.win[s.wPos] = ok ? 0 : 1; s.wErr += ok ? 0 : 1;
+      s.wPos = (s.wPos + 1) % s.win.length;
+      if (!ok) { s.fErr = true; s.errFlash = 1; }
+      if (++s.fBits === 32) {                             // 32 bits = una "trama" didáctica
+        s.fId++;
+        if (s.fErr) { s.fBad++; onFrameLost(s.fId); } else s.fOk++;
+        s.fBits = 0; s.fErr = false;
+      }
+    }
+    wi = (wi + 1) % N;
+    s.n++;
+  }
+
+  /* ================= REGISTRO DE EVENTOS ================= */
+  const logEl = $("#log");
+  const t0 = performance.now();
+  function log(tag, cls, html) {
+    const li = document.createElement("li");
+    const sec = Math.floor((performance.now() - t0) / 1000);
+    const mm = String(Math.floor(sec / 60)).padStart(2, "0"), ss = String(sec % 60).padStart(2, "0");
+    li.innerHTML = `<time>t = ${mm}:${ss}</time><span class="tag ${cls}">${tag}</span><span>${html}</span>`;
+    logEl.prepend(li);
+    while (logEl.children.length > 40) logEl.lastChild.remove();
+  }
+
+  let lastFrameLog = 0;
+  function onFrameLost(id) {
+    const now = performance.now();
+    if (now - lastFrameLog < 5000) return;
+    lastFrameLog = now;
+    log("TRAMA", "trama", `Trama #${id} descartada: el FCS (CRC-32) calculado en el PC no coincide con el recibido.`);
+  }
+
+  /* ---- registro de cambios en los controles ---- */
+  const debounce = {};
+  function explainLater(key, fn) {
+    clearTimeout(debounce[key]);
+    debounce[key] = setTimeout(fn, 550);
+  }
+  function explainLen() {
+    const L = st.len, dB = (L * DB_PER_M).toFixed(1);
+    log("DISTANCIA", "dist", `Longitud del cable: <b>${L} m</b> · atenuación <b>${dB} dB</b>.${L > 100 ? " Supera los 100 m que fija la norma." : ""}`);
+  }
+  function explainEmi() {
+    log("EMI", "emi", st.emi ? `Motor encendido al <b>${st.emi} %</b>.` : "Motor apagado.");
+  }
+  function explainRfi() {
+    log("RFI", "rfi", st.rfi ? `Antena emitiendo al <b>${st.rfi} %</b>.` : "Antena apagada.");
+  }
+  function explainXt() {
+    log("PAR VECINO", "next", st.xtalk ? "El par verde empieza a transmitir (del PC al switch)." : "El par verde deja de transmitir.");
+  }
+  function explainTw() {
+    log("PARES", "next", st.twisted ? "Pares <b>trenzados</b>." : "Pares <b>destrenzados</b>, como en un conector mal crimpado.");
+  }
+  function explainSh() {
+    const t = {
+      UTP: "Cable <b>UTP</b>: sin pantalla.",
+      FTP: "Cable <b>FTP</b>: una lámina de aluminio envuelve los cuatro pares.",
+      SFTP: "Cable <b>S/FTP</b>: lámina en cada par y malla exterior."
+    };
+    log("CABLE", "", t[st.shield]);
+  }
+
+  /* ================= INTERFAZ ================= */
+  const ui = {
+    len: $("#len"), emi: $("#emi"), rfi: $("#rfi"), xtalk: $("#xtalk"),
+    twOn: $("#twOn"), twOff: $("#twOff"), sh: { UTP: $("#shU"), FTP: $("#shF"), SFTP: $("#shS") }
+  };
+  function syncUI() {
+    ui.len.value = st.len; ui.emi.value = st.emi; ui.rfi.value = st.rfi; ui.xtalk.checked = st.xtalk;
+    (st.twisted ? ui.twOn : ui.twOff).checked = true;
+    ui.sh[st.shield].checked = true;
+    $("#oLen").textContent = st.len + " m";
+    $("#oEmi").textContent = st.emi + " %";
+    $("#oRfi").textContent = st.rfi + " %";
+    M = model();
+  }
+  const speedEl = $("#speed");
+  speedEl.addEventListener("input", () => {
+    st.speed = +speedEl.value;
+    $("#oSpeed").textContent = st.speed + (st.speed === 1 ? " bit/s" : " bits/s");
+  });
+  ui.len.addEventListener("input", () => { st.len = +ui.len.value; syncUI(); explainLater("len", explainLen); });
+  ui.emi.addEventListener("input", () => { st.emi = +ui.emi.value; syncUI(); explainLater("emi", explainEmi); });
+  ui.rfi.addEventListener("input", () => { st.rfi = +ui.rfi.value; syncUI(); explainLater("rfi", explainRfi); });
+  ui.xtalk.addEventListener("change", () => { st.xtalk = ui.xtalk.checked; syncUI(); explainLater("xt", explainXt); });
+  document.querySelectorAll('input[name="tw"]').forEach(r => r.addEventListener("change", () => { st.twisted = ui.twOn.checked; syncUI(); explainLater("tw", explainTw); }));
+  document.querySelectorAll('input[name="sh"]').forEach(r => r.addEventListener("change", () => { st.shield = r.value; syncUI(); explainLater("sh", explainSh); }));
+
+  $("#pause").addEventListener("click", e => {
+    st.running = !st.running;
+    e.currentTarget.textContent = st.running ? "Pausa" : "Continuar";
+    log("INFO", "", st.running ? "Simulación reanudada." : "Simulación en pausa.");
+  });
+  function resetCounters() {
+    sim.win.fill(0); sim.wN = 0; sim.wErr = 0; sim.wPos = 0;
+    sim.fOk = 0; sim.fBad = 0; sim.fBits = 0; sim.fErr = false;
+  }
+  $("#resetc").addEventListener("click", () => { resetCounters(); log("INFO", "", "Contadores de bits y tramas a cero."); });
+  $("#clearLog").addEventListener("click", () => { logEl.innerHTML = ""; });
+
+  const BASE = { len: 15, emi: 0, rfi: 0, xtalk: false, twisted: true, shield: "UTP" };
+  const SCEN = [
+    { n: "Enlace sano", set: {}, d: "15 m de cable UTP con los pares trenzados. Sin motores, antenas ni tráfico en el par vecino.",
+      q: "Compara la señal enviada con la recibida. ¿En qué se parecen y en qué se diferencian?" },
+    { n: "Cable de 95 m", set: { len: 95 }, d: "El mismo enlace, pero el cable mide 95 m.",
+      q: "Fíjate en la forma de los pulsos recibidos y en la atenuación. ¿Qué ha cambiado respecto al escenario 1?" },
+    { n: "Cable de 140 m", set: { len: 140 }, d: "El cable mide 140 m. Sigue sin haber interferencias.",
+      q: "¿Aparecen bits erróneos o tramas perdidas? ¿Qué relación ves con la marca de 100 m dibujada en el cable?" },
+    { n: "Motor + UTP", set: { len: 60, emi: 85 }, d: "Cable UTP de 60 m tendido junto a un motor funcionando al 85 %.",
+      q: "Observa la línea rosa del ruido en el osciloscopio. ¿Cómo afecta a los bits leídos?" },
+    { n: "Motor + S/FTP", set: { len: 60, emi: 85, shield: "SFTP" }, d: "La misma situación del escenario 4, pero con cable S/FTP (lámina en cada par y malla exterior).",
+      q: "Compara el ruido y los errores con el escenario 4. ¿A qué puede deberse la diferencia?" },
+    { n: "Antena", set: { len: 60, rfi: 80 }, d: "Cable UTP de 60 m cerca de una antena emisora al 80 %.",
+      q: "¿En qué se diferencia este ruido del que produce el motor?" },
+    { n: "Par vecino", set: { len: 90, xtalk: true }, d: "Cable UTP de 90 m. El par verde transmite datos en sentido contrario, del PC al switch.",
+      q: "Compara los cambios del par verde con la señal recibida en el par naranja. ¿Ves alguna relación?" },
+    { n: "Mal crimpado", set: { len: 90, xtalk: true, twisted: false }, d: "Como el escenario 7, pero con los pares destrenzados (conector mal crimpado).",
+      q: "¿Qué ocurre con los picos y los errores respecto al escenario 7?" },
+    { n: "Todo junto", set: { len: 100, emi: 60, rfi: 50, xtalk: true }, d: "Cable UTP de 100 m con un motor (60 %), una antena (50 %) y tráfico en el par vecino.",
+      q: "Cambia un solo control cada vez. ¿Cuál mejora más el enlace? ¿Por qué crees que ocurre?" }
+  ];
+  const scenEl = $("#scen"), scDesc = $("#scDesc");
+  scenEl.innerHTML = SCEN.map((sc, i) => `<button type="button" data-sc="${i}" aria-pressed="false"><b>${i + 1}</b>${sc.n}</button>`).join("");
+  function clearPressed() { scenEl.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false")); }
+  scenEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    const i = +b.dataset.sc, sc = SCEN[i];
+    Object.assign(st, BASE, sc.set); syncUI(); resetCounters();
+    clearPressed(); b.setAttribute("aria-pressed", "true");
+    scDesc.innerHTML = `<h3>Escenario ${i + 1} · ${sc.n}</h3><p>${sc.d}</p><div class="q"><b>Observa</b>${sc.q}</div>`;
+    log("ESCENARIO", "guia", `<b>${i + 1} · ${sc.n}.</b> ${sc.d}`);
+  }));
+  // si el alumno cambia un control, el escenario deja de estar marcado (la descripción se mantiene)
+  [ui.len, ui.emi, ui.rfi, ui.xtalk, ...document.querySelectorAll('input[name="tw"], input[name="sh"]')]
+    .forEach(el => el.addEventListener("input", clearPressed));
+
+  /* ================= ESTADO DEL ENLACE / PANEL EXPLICATIVO ================= */
+  const statusEl = $("#status"), statusText = $("#statusText");
+  const STATE = {
+    ok: ["Enlace OK", "ok"], deg: ["Enlace degradado", "deg"], bad: ["Muchos errores", "bad"], down: ["Enlace caído", "down"]
+  };
+  let linkState = "ok", pending = "ok", pendingCount = 0;
+  function evalState() {
+    const ber = sim.wN ? sim.wErr / sim.wN : 0;
+    const s = ber === 0 ? "ok" : ber < 0.02 ? "deg" : ber < 0.12 ? "bad" : "down";
+    if (s === pending) pendingCount++; else { pending = s; pendingCount = 1; }
+    if (pendingCount >= 3 && s !== linkState) {
+      const prev = linkState; linkState = s;
+      statusEl.dataset.s = s; statusText.textContent = STATE[s][0];
+      log("ENLACE", "enlace", `Estado del enlace: <b>${STATE[s][0]}</b> (${(ber * 100).toFixed(1)} % de bits erróneos).`);
+    }
+  }
+
+  const budgetDef = [
+    ["eye", "Señal útil", "var(--rx)"],
+    ["emiP", "EMI", "var(--noise)"],
+    ["rfiP", "RFI", "#c77dff"],
+    ["xtP", "Par vecino", "var(--pair2)"],
+    ["thP", "Ruido térmico", "var(--muted)"]
+  ];
+  const budgetEl = $("#budget");
+  budgetEl.innerHTML = budgetDef.map(([k, n, c]) =>
+    `<div class="brow"><span>${n}</span><span class="track"><i id="b_${k}" style="background:${c}"></i></span><span class="num" id="bn_${k}">0</span></div>`).join("");
+
+  function updateExplain() {
+    for (const [k] of budgetDef) {
+      const v = M[k];
+      $("#b_" + k).style.width = Math.min(100, v / 1.2 * 100) + "%";
+      $("#bn_" + k).textContent = v.toFixed(2);
+    }
+  }
+
+  function updateMetrics() {
+    const m = M;
+    $("#vLen").textContent = st.len;
+    $("#vAtt").textContent = m.dB.toFixed(1);
+    $("#vSnr").textContent = m.snr.toFixed(0);
+    const ber = sim.wN ? sim.wErr / sim.wN * 100 : 0;
+    $("#vBer").textContent = ber.toFixed(1);
+    $("#vFok").textContent = sim.fOk;
+    $("#vFbad").textContent = sim.fBad;
+    $("#mLen").className = "metric" + (st.len > 100 ? " bad" : st.len > 90 ? " warn" : "");
+    $("#mAtt").className = "metric" + (m.dB > MAX_GAIN_DB ? " bad" : m.dB > 19 ? " warn" : "");
+    $("#mSnr").className = "metric" + (m.snr < 6 ? " bad" : m.snr < 14 ? " warn" : "");
+    $("#mBer").className = "metric" + (ber > 2 ? " bad" : ber > 0 ? " warn" : "");
+    $("#mFr").className = "metric" + (sim.fBad > 0 ? " warn" : "");
+  }
+
+  /* ================= DIBUJO ================= */
+  const cv = $("#cable"), cx = cv.getContext("2d");
+  const sc = $("#scope"), sx = sc.getContext("2d");
+  let CW = 0, CH = 300, SW = 0, SH = 240;
+  function fit() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    CW = cv.clientWidth; SW = sc.clientWidth;
+    CH = CW < 560 ? 260 : 300; SH = CW < 560 ? 270 : 310;
+    cv.style.height = CH + "px"; sc.style.height = SH + "px";
+    cv.width = CW * dpr; cv.height = CH * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sc.width = SW * dpr; sc.height = SH * dpr; sx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener("resize", fit);
+
+  const rings = { emi: [], rfi: [], tE: 0, tR: 0 };
+
+  function rrect(c, x, y, w, h, r) {
+    c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+  }
+
+  function drawDevice(x, y, w, h, name, led, ledColor) {
+    const c = cx;
+    const g = c.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, "#1c3238"); g.addColorStop(1, "#112226");
+    rrect(c, x, y, w, h, 8); c.fillStyle = g; c.fill();
+    c.strokeStyle = "#2c4b52"; c.lineWidth = 1; c.stroke();
+    c.fillStyle = "#e4efe9"; c.font = `600 ${w < 80 ? 11 : 13}px "Chakra Petch", sans-serif`; c.textAlign = "center";
+    c.fillText(name, x + w / 2, y + 22);
+    // puerto RJ45
+    c.fillStyle = "#081013"; c.fillRect(x + w / 2 - 12, y + h - 30, 24, 18);
+    c.fillStyle = "#2c4b52"; c.fillRect(x + w / 2 - 8, y + h - 16, 16, 4);
+    // LED
+    c.beginPath(); c.arc(x + w / 2, y + 38, 5, 0, Math.PI * 2);
+    c.fillStyle = ledColor; c.globalAlpha = 0.35 + 0.65 * led; c.shadowColor = ledColor; c.shadowBlur = 12 * led;
+    c.fill(); c.shadowBlur = 0; c.globalAlpha = 1;
+  }
+
+  function drawCable(t, dt) {
+    const c = cx, W = CW, H = CH;
+    c.clearRect(0, 0, W, H);
+    // rejilla técnica de fondo
+    c.strokeStyle = "rgba(87,214,224,0.05)"; c.lineWidth = 1;
+    for (let x = 0; x < W; x += 24) { c.beginPath(); c.moveTo(x + 0.5, 0); c.lineTo(x + 0.5, H); c.stroke(); }
+    for (let y = 0; y < H; y += 24) { c.beginPath(); c.moveTo(0, y + 0.5); c.lineTo(W, y + 0.5); c.stroke(); }
+
+    const dev = W < 560 ? 62 : 92;
+    const x0 = dev + 18, x1 = W - dev - 18, cy = H * 0.5;
+    const span = x1 - x0;
+    const xE = x0 + span * 0.40, xR = x0 + span * 0.70;
+    const yE = cy + (H < 280 ? 82 : 96), yR = cy - (H < 280 ? 92 : 106);
+
+    // ---- fuentes de interferencia ----
+    const emiOn = st.emi > 0, rfiOn = st.rfi > 0;
+    if (st.running) {
+      rings.tE -= dt; rings.tR -= dt;
+      if (emiOn && rings.tE <= 0) { rings.emi.push(0); rings.tE = 0.9 - st.emi / 160; }
+      if (rfiOn && rings.tR <= 0) { rings.rfi.push(0); rings.tR = 0.55 - st.rfi / 300; }
+      for (let i = 0; i < rings.emi.length; i++) rings.emi[i] += dt * 110;
+      for (let i = 0; i < rings.rfi.length; i++) rings.rfi[i] += dt * 140;
+    }
+    while (rings.emi.length && rings.emi[0] > 130) rings.emi.shift();
+    while (rings.rfi.length && rings.rfi[0] > 150) rings.rfi.shift();
+    c.lineWidth = 2;
+    for (const r of rings.emi) {
+      c.strokeStyle = `rgba(238,93,138,${(1 - r / 130) * (0.25 + st.emi / 140)})`;
+      c.beginPath(); c.arc(xE, yE, r, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+    }
+    for (const r of rings.rfi) {
+      c.strokeStyle = `rgba(199,125,255,${(1 - r / 150) * (0.25 + st.rfi / 140)})`;
+      c.beginPath(); c.arc(xR, yR, r, Math.PI * 0.12, Math.PI * 0.88); c.stroke();
+    }
+    // motor
+    c.globalAlpha = emiOn ? 1 : 0.35;
+    c.beginPath(); c.arc(xE, yE, 20, 0, Math.PI * 2); c.fillStyle = "#1a2b30"; c.fill();
+    c.strokeStyle = "#ee5d8a"; c.lineWidth = 2; c.stroke();
+    c.save(); c.translate(xE, yE); c.rotate(emiOn && st.running ? t * (2 + st.emi / 20) : 0);
+    c.strokeStyle = "#ee5d8a"; c.lineWidth = 2;
+    for (let k = 0; k < 3; k++) { c.rotate(Math.PI * 2 / 3); c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -13); c.stroke(); }
+    c.restore();
+    c.fillStyle = "#e4efe9"; c.font = '500 11px "IBM Plex Mono", monospace'; c.textAlign = "left";
+    c.fillText(emiOn ? `MOTOR · EMI ${st.emi}%` : "MOTOR (apagado)", xE + 28, yE + 4);
+    // antena
+    c.globalAlpha = rfiOn ? 1 : 0.35;
+    c.strokeStyle = "#c77dff"; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(xR - 12, yR + 22); c.lineTo(xR, yR - 16); c.lineTo(xR + 12, yR + 22);
+    c.moveTo(xR - 7, yR + 6); c.lineTo(xR + 7, yR + 6); c.stroke();
+    c.beginPath(); c.arc(xR, yR - 18, 4, 0, Math.PI * 2); c.fillStyle = "#c77dff"; c.fill();
+    c.fillStyle = "#e4efe9"; c.textAlign = "left";
+    c.fillText(rfiOn ? `ANTENA · RFI ${st.rfi}%` : "ANTENA (apagada)", xR + 20, yR);
+    c.globalAlpha = 1;
+
+    // ---- funda del cable ----
+    const jH = 58, jy = cy - jH / 2;
+    const jg = c.createLinearGradient(0, jy, 0, jy + jH);
+    if (st.shield === "UTP") { jg.addColorStop(0, "#2d4a8a"); jg.addColorStop(1, "#1a2d58"); }
+    else { jg.addColorStop(0, "#5b6a72"); jg.addColorStop(0.5, "#3a464c"); jg.addColorStop(1, "#262f33"); }
+    rrect(c, x0, jy, span, jH, 14); c.fillStyle = jg; c.globalAlpha = 0.55; c.fill(); c.globalAlpha = 1;
+    // pantalla metálica
+    if (st.shield !== "UTP") {
+      c.save(); rrect(c, x0 + 3, jy + 3, span - 6, jH - 6, 11); c.clip();
+      c.strokeStyle = "rgba(210,225,230,0.18)"; c.lineWidth = 1;
+      for (let x = x0 - 60; x < x1 + 60; x += 7) {
+        c.beginPath(); c.moveTo(x, jy); c.lineTo(x + 30, jy + jH); c.stroke();
+        if (st.shield === "SFTP") { c.beginPath(); c.moveTo(x + 30, jy); c.lineTo(x, jy + jH); c.stroke(); }
+      }
+      c.restore();
+      if (st.shield === "SFTP") {
+        c.strokeStyle = "rgba(220,230,235,0.45)"; c.lineWidth = 1.2;
+        rrect(c, x0 + 6, cy - 23, span - 12, 20, 9); c.stroke();
+        rrect(c, x0 + 6, cy + 3, span - 12, 20, 9); c.stroke();
+      }
+    }
+    c.strokeStyle = st.shield === "UTP" ? "#3d5ea8" : "#9aabb2"; c.lineWidth = 1.5;
+    rrect(c, x0, jy, span, jH, 14); c.stroke();
+    // tramo fuera de norma
+    if (st.len > 100) {
+      const xl = x0 + span * (100 / st.len);
+      c.fillStyle = "rgba(255,92,92,0.13)"; c.fillRect(xl, jy - 6, x1 - xl, jH + 12);
+      c.setLineDash([5, 4]); c.strokeStyle = "#ff5c5c"; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(xl, jy - 14); c.lineTo(xl, jy + jH + 14); c.stroke(); c.setLineDash([]);
+      c.fillStyle = "#ff5c5c"; c.font = '600 11px "IBM Plex Mono", monospace'; c.textAlign = "center";
+      c.fillText("100 m · límite", xl, jy - 18);
+    }
+
+    // ---- pares ----
+    const m = M;
+    const jitE = Math.min(9, m.kE / 0.15 * 9), jitR = Math.min(5, m.kR / 0.18 * 5);
+    const cyA = cy - 12, cyB = cy + 12;
+    function strand(center, sign, col, width, phase, victim) {
+      c.strokeStyle = col; c.lineWidth = width; c.lineCap = "round";
+      c.beginPath();
+      for (let x = x0 + 8; x <= x1 - 8; x += 3) {
+        let y = st.twisted ? center + sign * 5 * Math.sin((x - x0) * 0.26 + phase) : center + sign * 4;
+        if (victim && st.running) {
+          const nearE = Math.exp(-(((x - xE) / (span * 0.22)) ** 2));
+          y += jitE * nearE * (Math.random() - 0.5) * 2;
+          y += jitR * Math.sin(x * 0.9 + t * 40) * 0.8;
+        }
+        if (x === x0 + 8) c.moveTo(x, y); else c.lineTo(x, y);
+      }
+      c.stroke();
+    }
+    strand(cyB, -1, "#e9efe4", 3, Math.PI, false);
+    strand(cyB, 1, "#3fae5c", 3, Math.PI, false);
+    strand(cyA, -1, "#f4e6d6", 3.2, 0, true);
+    strand(cyA, 1, "#e8853d", 3.2, 0, true);
+
+    // ---- chispas de diafonía ----
+    const xtVis = m.kX / 0.15;
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      if (st.running) s.life -= dt * 3;
+      if (s.life <= 0 || !st.xtalk) { sparks.splice(i, 1); continue; }
+      const sxp = x0 + span * s.x;
+      c.strokeStyle = `rgba(111,210,143,${s.life * (0.25 + xtVis * 0.75)})`; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(sxp, cyB - 2);
+      c.lineTo(sxp + 4, cyB - 8); c.lineTo(sxp - 3, cyA + 7); c.lineTo(sxp + 2, cyA + 1); c.stroke();
+    }
+
+    // ---- pulsos ----
+    const travel = Math.max(1.8, 9 / st.speed);   // a baja velocidad los pulsos también van despacio
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      if (st.running) p.p += dt / travel;
+      if (p.p > 1) { parts.splice(i, 1); continue; }
+      const xm = p.p * st.len;
+      const amp = Math.pow(10, -(xm * DB_PER_M) / 20);
+      const vis = Math.max(0.1, Math.pow(amp, 0.7));
+      const px = x0 + 8 + p.p * (span - 16);
+      const over = xm > 100;
+      const col = over ? "255,92,92" : "156,196,255";
+      c.beginPath(); c.arc(px, cyA, (p.v > 0 ? 5.5 : 3.5) * (0.5 + 0.5 * vis), 0, Math.PI * 2);
+      c.fillStyle = `rgba(${col},${vis * (p.v > 0 ? 1 : 0.45)})`;
+      c.shadowColor = `rgba(${col},1)`; c.shadowBlur = 14 * vis;
+      c.fill(); c.shadowBlur = 0;
+    }
+    for (let i = aparts.length - 1; i >= 0; i--) {
+      const p = aparts[i];
+      if (st.running) p.p += dt / travel;
+      if (p.p > 1 || !st.xtalk) { aparts.splice(i, 1); continue; }
+      const px = x1 - 8 - p.p * (span - 16);
+      const vis = Math.max(0.15, 1 - p.p * 0.8);
+      c.beginPath(); c.arc(px, cyB, 3.5, 0, Math.PI * 2);
+      c.fillStyle = `rgba(111,210,143,${vis})`; c.fill();
+    }
+
+    // ---- regla de distancia ----
+    const ry = cy + jH / 2 + 14;
+    c.strokeStyle = "rgba(138,168,160,0.5)"; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(x0, ry); c.lineTo(x1, ry); c.stroke();
+    c.fillStyle = "#8aa8a0"; c.font = '500 10.5px "IBM Plex Mono", monospace'; c.textAlign = "center";
+    const stepM = st.len > 80 ? 25 : st.len > 30 ? 10 : st.len > 10 ? 5 : 1;
+    for (let d = 0; d <= st.len; d += stepM) {
+      const x = x0 + span * (d / st.len);
+      c.beginPath(); c.moveTo(x, ry - 3); c.lineTo(x, ry + 3); c.stroke();
+      if (span * stepM / st.len > 26) c.fillText(d + " m", x, ry + 15);
+    }
+    c.textAlign = "right"; c.fillStyle = "#e08f4f"; c.font = '600 11px "IBM Plex Mono", monospace';
+    c.fillText(st.len + " m", x1, ry + 15);
+
+    // ---- equipos ----
+    const led = (sim.n % 12) < 6 ? 1 : 0.3;
+    drawDevice(8, cy - 48, dev, 96, "SWITCH", st.running ? led : 0.3, "#6fd28f");
+    if (st.running) sim.errFlash = Math.max(0, sim.errFlash - dt * 2.5);
+    const pcCol = sim.errFlash > 0.05 ? "#ff5c5c" : "#6fd28f";
+    drawDevice(W - dev - 8, cy - 48, dev, 96, "PC", sim.errFlash > 0.05 ? sim.errFlash : (st.running ? led : 0.3), pcCol);
+    if (sim.errFlash > 0.05) {
+      c.fillStyle = `rgba(255,92,92,${sim.errFlash})`; c.font = '700 12px "IBM Plex Mono", monospace'; c.textAlign = "center";
+      c.fillText("¡ERROR!", W - dev / 2 - 8, cy + 66);
+    }
+    // conectores
+    c.fillStyle = "#b9c6cb";
+    c.fillRect(x0 - 12, cy - 9, 12, 18); c.fillRect(x1, cy - 9, 12, 18);
+  }
+
+  function drawScope() {
+    const c = sx, W = SW, H = SH;
+    c.clearRect(0, 0, W, H);
+    const pad = 8, gap = 10;
+    const txTop = 8, txH = H * 0.22, txMid = txTop + txH / 2 + 6;
+    const agTop = txTop + txH + gap, agH = H * 0.18, agMid = agTop + agH / 2 + 6;
+    const rxTop = agTop + agH + gap, rxH = H - rxTop - 8, rxMid = rxTop + rxH / 2 + 6;
+    const sTx = txH * 0.3, sAg = agH * 0.26, sRx = rxH * 0.28;
+    // fondos de los carriles
+    c.fillStyle = "rgba(224,143,79,0.05)"; c.fillRect(0, txTop, W, txH);
+    c.fillStyle = "rgba(63,174,92,0.06)"; c.fillRect(0, agTop, W, agH);
+    c.fillStyle = "rgba(156,196,255,0.05)"; c.fillRect(0, rxTop, W, rxH);
+    // rejilla
+    c.strokeStyle = "rgba(156,196,255,0.07)"; c.lineWidth = 1;
+    const div = (W - pad) / 13;
+    for (let i = 0; i <= 13; i++) { const x = pad + i * div; c.beginPath(); c.moveTo(x, txTop); c.lineTo(x, H - 8); c.stroke(); }
+    for (let k = -2; k <= 2; k++) { const y = rxMid + k * sRx; c.beginPath(); c.moveTo(pad, y); c.lineTo(W, y); c.stroke(); }
+    // umbral
+    c.setLineDash([4, 4]); c.strokeStyle = "rgba(240,192,82,0.6)";
+    c.beginPath(); c.moveTo(pad, rxMid); c.lineTo(W, rxMid); c.stroke(); c.setLineDash([]);
+    c.fillStyle = "rgba(240,192,82,0.85)"; c.font = '500 10px "IBM Plex Mono", monospace'; c.textAlign = "right";
+    c.fillText("umbral 1/0", W - 6, rxMid - 5);
+
+    const xs = i => pad + (i / (N - 1)) * (W - pad);
+    const clampY = (v, top, h) => Math.max(top + 1, Math.min(top + h - 1, v));
+    const bw = (W - pad) / N * SPB;
+    // bandas de error
+    for (let i = 0; i < N; i++) {
+      const j = (wi + i) % N;
+      if (mk[j] === 2) { c.fillStyle = "rgba(255,92,92,0.16)"; c.fillRect(xs(i) - bw, txTop, bw, H - txTop - 8); }
+    }
+    // cada flanco del par vecino: línea guía hasta la señal recibida
+    c.setLineDash([2, 4]); c.lineWidth = 1;
+    c.strokeStyle = `rgba(63,174,92,${0.25 + 0.5 * Math.min(1, M.kX / 0.15)})`;
+    for (let i = 0; i < N; i++) {
+      const j = (wi + i) % N;
+      if (!agE[j]) continue;
+      const x = xs(i); c.beginPath(); c.moveTo(x, agTop + 4); c.lineTo(x, rxTop + rxH - 2); c.stroke();
+    }
+    c.setLineDash([]);
+    function trace(buf, mid, scale, top, h, col, w, alpha) {
+      c.strokeStyle = col; c.lineWidth = w; c.globalAlpha = alpha; c.lineJoin = "round";
+      c.beginPath();
+      for (let i = 0; i < N; i++) {
+        const j = (wi + i) % N;
+        const y = clampY(mid - buf[j] * scale, top, h);
+        if (i === 0) c.moveTo(xs(i), y); else c.lineTo(xs(i), y);
+      }
+      c.stroke(); c.globalAlpha = 1;
+    }
+    trace(txB, txMid, sTx, txTop, txH, "#e08f4f", 2, 1);
+    trace(agB, agMid, sAg, agTop, agH, "#3fae5c", 2, st.xtalk ? 1 : 0.35);
+    trace(nzB, rxMid, sRx, rxTop, rxH, "#ee5d8a", 1.6, 0.8);
+    c.shadowColor = "#9cc4ff"; c.shadowBlur = 6;
+    trace(rxB, rxMid, sRx, rxTop, rxH, "#9cc4ff", 2, 1);
+    c.shadowBlur = 0;
+    // marcas de decisión
+    for (let i = 0; i < N; i++) {
+      const j = (wi + i) % N;
+      if (!mk[j]) continue;
+      const x = xs(i), y = clampY(rxMid - rxB[j] * sRx, rxTop, rxH);
+      if (mk[j] === 1) { c.beginPath(); c.arc(x, y, 2.6, 0, Math.PI * 2); c.fillStyle = "#ffffff"; c.fill(); }
+      else {
+        c.strokeStyle = "#ff5c5c"; c.lineWidth = 2;
+        c.beginPath(); c.moveTo(x - 4, y - 4); c.lineTo(x + 4, y + 4); c.moveTo(x + 4, y - 4); c.lineTo(x - 4, y + 4); c.stroke();
+      }
+    }
+    // rótulos de carril
+    function label(text, y, col) {
+      c.font = '600 10.5px "IBM Plex Mono", monospace'; c.textAlign = "left";
+      const w = c.measureText(text).width + 10;
+      c.fillStyle = "rgba(8,16,19,0.8)"; c.fillRect(pad, y, w, 16);
+      c.fillStyle = col; c.fillText(text, pad + 5, y + 12);
+    }
+    label("PAR NARANJA · ENVIADO POR EL SWITCH", txTop + 2, "#e08f4f");
+    label(st.xtalk ? "PAR VERDE · VECINO (transmite del PC al switch)" : "PAR VERDE · VECINO (sin tráfico)", agTop + 2, "#3fae5c");
+    label("PAR NARANJA · RECIBIDO EN EL PC", rxTop + 2, "#9cc4ff");
+  }
+
+  /* ================= BUCLE ================= */
+  let last = performance.now(), acc = 0, uiT = 0, stT = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (st.running) {
+      acc += dt * st.speed * SPB;         // muestras por segundo según la velocidad elegida
+      while (acc >= 1) { step(); acc--; }
+    }
+    drawCable(now / 1000, dt);
+    drawScope();
+    uiT += dt; stT += dt;
+    if (uiT > 0.25) { uiT = 0; updateMetrics(); updateExplain(); }
+    if (stT > 0.4) { stT = 0; if (st.running) evalState(); }
+    requestAnimationFrame(frame);
+  }
+
+  fit(); syncUI();
+  for (let i = 0; i < N; i++) step();     // llena el osciloscopio desde el primer fotograma
+  parts.length = 0; aparts.length = 0; sparks.length = 0;
+  resetCounters();
+  updateMetrics(); updateExplain();
+  log("INFO", "", "Selecciona un escenario (1–9) o cambia los controles. Aquí se registra lo que ocurre durante la simulación.");
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
