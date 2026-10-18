@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Redes: Rendimiento y Goodput</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #0f172a; /* slate-900 */
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 0.75rem;
+            background: #1e293b; /* slate-800 */
+            box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        /* Custom Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: currentColor;
+            cursor: pointer;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-6 lg:p-8 flex flex-col items-center">
+
+    <header class="w-full max-w-7xl mb-8 text-center">
+        <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-4">
+            Simulador de Tráfico de Red
+        </h1>
+        <p class="text-slate-400 max-w-3xl mx-auto text-base md:text-lg">
+            Ajusta los parámetros para ver cómo el <span class="text-blue-400 font-semibold">Ancho de Banda</span> define los carriles, 
+            el <span class="text-indigo-400 font-semibold">Rendimiento (Throughput)</span> dicta los paquetes efectivos, y el 
+            <span class="text-emerald-400 font-semibold">Goodput</span> representa la carga útil dentro de cada paquete.
+        </p>
+    </header>
+
+    <main class="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Panel Izquierdo: Controles -->
+        <section class="lg:col-span-4 bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-2xl backdrop-blur-sm flex flex-col gap-6">
+            <h2 class="text-xl font-bold text-white border-b border-slate-700 pb-3">Parámetros de Red</h2>
+            
+            <!-- Ancho de Banda -->
+            <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between items-end">
+                    <label class="text-sm font-semibold text-blue-400">Ancho de Banda</label>
+                    <span id="val-bw" class="text-base font-bold text-white bg-blue-500/20 px-2 py-0.5 rounded">100 Mbps</span>
+                </div>
+                <input type="range" id="input-bw" min="10" max="1000" step="10" value="100" class="text-blue-500">
+                <p class="text-xs text-slate-400">Capacidad máxima del enlace (Número de carriles).</p>
+            </div>
+
+            <!-- Rendimiento (Throughput) -->
+            <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between items-end">
+                    <label class="text-sm font-semibold text-indigo-400">Rendimiento (Throughput)</label>
+                    <span id="val-thru-pct" class="text-base font-bold text-white bg-indigo-500/20 px-2 py-0.5 rounded">90 %</span>
+                </div>
+                <input type="range" id="input-thru" min="10" max="100" step="1" value="90" class="text-indigo-500">
+                <p class="text-xs text-slate-400">% del ancho de banda que realmente logra transmitir.</p>
+            </div>
+
+            <!-- Goodput -->
+            <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between items-end">
+                    <label class="text-sm font-semibold text-emerald-400">Porcentaje de Goodput</label>
+                    <span id="val-good-pct" class="text-base font-bold text-white bg-emerald-500/20 px-2 py-0.5 rounded">80 %</span>
+                </div>
+                <input type="range" id="input-good" min="10" max="100" step="1" value="80" class="text-emerald-500">
+                <p class="text-xs text-slate-400">Datos útiles vs Sobrecarga de red dentro del paquete.</p>
+            </div>
+
+            <!-- Latencia -->
+            <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between items-end">
+                    <label class="text-sm font-semibold text-purple-400">Latencia (Retardo)</label>
+                    <span id="val-lat" class="text-base font-bold text-white bg-purple-500/20 px-2 py-0.5 rounded">50 ms</span>
+                </div>
+                <input type="range" id="input-lat" min="10" max="500" step="10" value="50" class="text-purple-500">
+                <p class="text-xs text-slate-400">Tiempo de viaje (Velocidad base de los paquetes).</p>
+            </div>
+
+            <div class="flex flex-col gap-1.5 mt-2 pt-4 border-t border-slate-700">
+                <div class="flex justify-between items-end">
+                    <label class="text-sm font-semibold text-rose-400">Tamaño del Archivo</label>
+                    <span id="val-file" class="text-base font-bold text-white bg-rose-500/20 px-2 py-0.5 rounded">1000 MB</span>
+                </div>
+                <input type="range" id="input-file" min="10" max="5000" step="10" value="1000" class="text-rose-500">
+                <p class="text-xs text-slate-400">Volumen de datos a descargar (MB).</p>
+            </div>
+
+            <!-- Velocidad de Animación (NUEVO) -->
+            <div class="flex flex-col gap-1.5 mt-2 pt-4 border-t border-slate-700">
+                <div class="flex justify-between items-end">
+                    <label class="text-sm font-semibold text-yellow-400">Velocidad de Animación</label>
+                    <span id="val-anim" class="text-base font-bold text-white bg-yellow-500/20 px-2 py-0.5 rounded">1.0 x</span>
+                </div>
+                <input type="range" id="input-anim" min="0.1" max="5.0" step="0.1" value="1.0" class="text-yellow-500">
+                <p class="text-xs text-slate-400">Acelera o ralentiza la visualización (No afecta métricas).</p>
+            </div>
+        </section>
+
+        <!-- Panel Derecho: Visualización y Métricas -->
+        <section class="lg:col-span-8 flex flex-col gap-6">
+            
+            <!-- Tarjetas de Métricas -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700 shadow-md">
+                    <h3 class="text-xs font-medium text-slate-400 uppercase tracking-wide">Ancho de Banda</h3>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span id="metric-bw" class="text-3xl font-extrabold text-blue-400">100</span> 
+                        <span class="text-sm text-slate-300">Mbps</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700 shadow-md">
+                    <h3 class="text-xs font-medium text-slate-400 uppercase tracking-wide">Throughput Real</h3>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span id="metric-thru" class="text-3xl font-extrabold text-indigo-400">90.0</span> 
+                        <span class="text-sm text-slate-300">Mbps</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700 shadow-md relative overflow-hidden">
+                    <div class="absolute inset-0 bg-emerald-500/5"></div>
+                    <h3 class="text-xs font-medium text-slate-400 uppercase tracking-wide">Goodput (Carga Útil)</h3>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <span id="metric-good" class="text-3xl font-extrabold text-emerald-400">72.0</span> 
+                        <span class="text-sm text-slate-300">Mbps</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-rose-500/50 shadow-md relative overflow-hidden ring-1 ring-rose-500/30">
+                    <div class="absolute inset-0 bg-rose-500/5"></div>
+                    <h3 class="text-xs font-medium text-rose-300 uppercase tracking-wide">Tiempo Estimado</h3>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <span id="metric-time" class="text-xl lg:text-2xl font-extrabold text-white">00:00</span> 
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Afectado por latencia (TCP)</p>
+                </div>
+            </div>
+
+            <!-- Contenedor del Canvas -->
+            <div class="bg-slate-900 p-2 rounded-2xl border border-slate-700 shadow-2xl relative h-[400px] flex flex-col">
+                <div class="flex justify-between px-4 pt-2 pb-2 z-10 bg-slate-900/50 rounded-t-xl">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Servidor</span>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Cliente</span>
+                </div>
+                
+                <div class="relative flex-grow rounded-xl overflow-hidden">
+                    <canvas id="networkCanvas"></canvas>
+                </div>
+                
+                <!-- Leyenda del Canvas -->
+                <div class="absolute bottom-4 left-0 right-0 flex justify-center z-10 pointer-events-none">
+                    <div class="flex gap-4 text-xs font-bold text-slate-300 bg-slate-900/90 border border-slate-700 px-5 py-2.5 rounded-full backdrop-blur-md shadow-lg">
+                        <span class="flex items-center gap-2">
+                            <div class="w-4 h-3 bg-slate-600 rounded-[2px] relative overflow-hidden border border-slate-500">
+                                <div class="absolute top-0 left-0 h-full bg-emerald-500 w-[70%]"></div>
+                            </div>
+                            Estructura de un Paquete: <span class="text-emerald-400 ml-1">Goodput</span> + <span class="text-slate-400 ml-1">Overhead</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Referencias a inputs
+        const inputs = {
+            bw: document.getElementById('input-bw'),
+            thru: document.getElementById('input-thru'),
+            good: document.getElementById('input-good'),
+            lat: document.getElementById('input-lat'),
+            anim: document.getElementById('input-anim'),
+            file: document.getElementById('input-file') // NUEVO
+        };
+        // Referencias a etiquetas
+        const labels = {
+            bw: document.getElementById('val-bw'),
+            thru: document.getElementById('val-thru-pct'),
+            good: document.getElementById('val-good-pct'),
+            lat: document.getElementById('val-lat'),
+            anim: document.getElementById('val-anim'),
+            file: document.getElementById('val-file') // NUEVO
+        };
+        // Referencias a métricas
+        const metrics = {
+            bw: document.getElementById('metric-bw'),
+            thru: document.getElementById('metric-thru'),
+            good: document.getElementById('metric-good'),
+            time: document.getElementById('metric-time') // NUEVO
+        };
+
+        // Estado Global
+        let state = {
+            bw: 100,        // Mbps
+            thruPct: 90,    // %
+            goodPct: 80,    // %
+            lat: 50,        // ms
+            animSpeed: 1.0, // Multiplicador
+            fileSize: 1000, // MB
+            numLanes: 1     // Calculado dinámicamente
+        };
+
+        // CONSTANTES VISUALES FIJAS REQUERIDAS
+        const PACKET_WIDTH = 32;
+        const PACKET_HEIGHT = 14;
+        const MAX_LANES = 10;
+
+        function formatTime(seconds) {
+            if (!isFinite(seconds) || seconds <= 0) return "0s";
+            if (seconds < 60) return `${seconds.toFixed(1)} s`;
+            
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            const h = Math.floor(m / 60);
+            const remainingM = m % 60;
+
+            if (h > 0) return `${h}h ${remainingM}m ${s}s`;
+            return `${m}m ${s}s`;
+        }
+
+        // Actualizar el estado y las métricas numéricas
+        function updateState() {
+            state.bw = parseFloat(inputs.bw.value);
+            state.thruPct = parseFloat(inputs.thru.value);
+            state.goodPct = parseFloat(inputs.good.value);
+            state.lat = parseFloat(inputs.lat.value);
+            state.animSpeed = parseFloat(inputs.anim.value);
+            state.fileSize = parseFloat(inputs.file.value);
+
+            // Ancho de banda a número de carriles (10 a 1000 Mbps -> 1 a 10 carriles)
+            state.numLanes = Math.max(1, Math.ceil(state.bw / 100));
+            // Asegurar que 10-90 Mbps sea 1 carril visual
+            if (state.bw < 100) state.numLanes = 1;
+
+            // Actualizar textos en los controles
+            labels.bw.innerText = `${state.bw} Mbps`;
+            labels.thru.innerText = `${state.thruPct} %`;
+            labels.good.innerText = `${state.goodPct} %`;
+            labels.lat.innerText = `${state.lat} ms`;
+            labels.anim.innerText = `${state.animSpeed.toFixed(1)} x`;
+            labels.file.innerText = `${state.fileSize} MB`;
+
+            // Calcular valores finales en Mbps
+            const rawThroughput = state.bw * (state.thruPct / 100);
+            
+            // Penalización por Latencia (Simulación de ventana TCP).
+            // Si la latencia es alta, los paquetes de confirmación tardan en volver,
+            // reduciendo la cantidad de datos efectivos que el servidor puede inyectar.
+            const tcpPenalty = Math.max(0.1, 1 - (state.lat / 800)); // Ej: 50ms = 93.7% eficiencia. 500ms = 37.5%
+            
+            const finalThroughput = rawThroughput * tcpPenalty;
+            const goodput = finalThroughput * (state.goodPct / 100);
+
+            // Calcular Tiempo de Descarga (Segundos)
+            const sizeMegabits = state.fileSize * 8; // MB a Megabits
+            const latSeconds = state.lat / 1000;
+            // Tiempo total = Retardo inicial (1 viaje) + Tiempo de transmisión a velocidad mermada
+            const totalTime = latSeconds + (sizeMegabits / goodput);
+
+            // Actualizar tarjetas de métricas
+            metrics.bw.innerText = state.bw;
+            metrics.thru.innerText = finalThroughput.toFixed(1);
+            metrics.good.innerText = goodput.toFixed(1);
+            metrics.time.innerText = formatTime(totalTime);
+        }
+
+        // Asignar listeners
+        Object.values(inputs).forEach(input => {
+            input.addEventListener('input', updateState);
+        });
+
+        // Preparación del Canvas
+        const canvas = document.getElementById('networkCanvas');
+        const ctx = canvas.getContext('2d');
+        let packets = [];
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        updateState();
+
+        // Clase para los paquetes de datos
+        class Packet {
+            constructor(laneIndex, laneHeight, pipeStartY, goodputPercent) {
+                // Posición inicial fuera de pantalla por la izquierda
+                this.x = -PACKET_WIDTH; 
+                // Posición vertical: centrada dentro de su carril
+                this.y = pipeStartY + (laneIndex * laneHeight) + (laneHeight / 2);
+                
+                // Propiedades fijas de tamaño
+                this.width = PACKET_WIDTH;
+                this.height = PACKET_HEIGHT;
+                
+                // Porcentaje de relleno (Goodput vs Overhead)
+                this.goodputRatio = goodputPercent / 100;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // 1. Dibujar el fondo del paquete completo (Representa Overhead / Tamaño total)
+                ctx.fillStyle = '#475569'; // Gris (slate-600)
+                ctx.beginPath();
+                ctx.roundRect(-this.width/2, -this.height/2, this.width, this.height, 4);
+                ctx.fill();
+
+                // 2. Dibujar la porción útil del paquete (Goodput)
+                // Se dibuja un rectángulo interior que llena de izquierda a derecha
+                const goodWidth = this.width * this.goodputRatio;
+                
+                // Usamos clip para mantener los bordes redondeados al pintar el interior
+                ctx.beginPath();
+                ctx.roundRect(-this.width/2, -this.height/2, this.width, this.height, 4);
+                ctx.clip();
+
+                ctx.fillStyle = '#10b981'; // Verde (emerald-500)
+                ctx.shadowColor = '#10b981';
+                ctx.shadowBlur = 8;
+                ctx.fillRect(-this.width/2, -this.height/2, goodWidth, this.height);
+
+                // Brillo decorativo para darle aspecto "tecnológico"
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.fillRect(-this.width/2, -this.height/2, goodWidth, this.height / 3);
+
+                ctx.restore();
+            }
+
+            update(speed) {
+                this.x += speed;
+            }
+        }
+
+        // Bucle Principal de Animación
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // -- DIBUJO DE LA AUTOPISTA (CARRILES) --
+            // Altura total disponible dejando un margen
+            const availableHeight = canvas.height - 20; 
+            const laneHeight = availableHeight / MAX_LANES;
+            const currentPipeHeight = state.numLanes * laneHeight;
+            // Centrar verticalmente
+            const pipeStartY = (canvas.height - currentPipeHeight) / 2;
+
+            // Fondo del "tubo" activo
+            ctx.fillStyle = 'rgba(30, 41, 59, 0.7)'; // slate-800
+            ctx.fillRect(0, pipeStartY, canvas.width, currentPipeHeight);
+
+            // Bordes superior e inferior
+            ctx.strokeStyle = '#64748b'; // slate-500
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, pipeStartY);
+            ctx.lineTo(canvas.width, pipeStartY);
+            ctx.moveTo(0, pipeStartY + currentPipeHeight);
+            ctx.lineTo(canvas.width, pipeStartY + currentPipeHeight);
+            ctx.stroke();
+
+            // Líneas divisorias de carriles (Dashed)
+            ctx.strokeStyle = 'rgba(100, 116, 139, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([15, 10]);
+            for (let i = 1; i < state.numLanes; i++) {
+                const lineY = pipeStartY + i * laneHeight;
+                ctx.beginPath();
+                ctx.moveTo(0, lineY);
+                ctx.lineTo(canvas.width, lineY);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]); // Reset
+
+            // -- LÓGICA DE GENERACIÓN DE PAQUETES --
+            // La probabilidad base por carril (spawn rate)
+            const baseSpawnRate = 0.05; 
+            
+            // El rendimiento (Throughput %) reduce la cantidad de paquetes que logran viajar
+            const throughputRatio = state.thruPct / 100;
+            
+            // Probabilidad total = Carriles * Tasa * Rendimiento
+            const spawnChance = state.numLanes * baseSpawnRate * throughputRatio;
+            
+            // Generar 1 o más paquetes por frame si la probabilidad > 1
+            let spawnsThisFrame = Math.floor(spawnChance);
+            if (Math.random() < (spawnChance - spawnsThisFrame)) {
+                spawnsThisFrame++;
+            }
+
+            for (let i = 0; i < spawnsThisFrame; i++) {
+                // Escoger un carril aleatorio
+                const laneIndex = Math.floor(Math.random() * state.numLanes);
+                
+                // Crear paquete enviándole el % de goodput actual para que se pinte acorde
+                packets.push(new Packet(laneIndex, laneHeight, pipeStartY, state.goodPct));
+            }
+
+            // -- ACTUALIZAR Y DIBUJAR PAQUETES --
+            // Calcular velocidad base según la Latencia (Inversamente proporcional)
+            // 500ms = 2px por frame (lento). 10ms = 18px por frame (rápido).
+            const minSpeed = 2;
+            const maxSpeed = 18;
+            const latRatio = (500 - state.lat) / 490; // Normalizado de 0 a 1
+            const baseSpeed = minSpeed + (maxSpeed - minSpeed) * latRatio;
+
+            // Aplicar el NUEVO CONTROL: Velocidad de Animación
+            const actualSpeed = baseSpeed * state.animSpeed;
+
+            for (let i = packets.length - 1; i >= 0; i--) {
+                const p = packets[i];
+                p.update(actualSpeed);
+                p.draw(ctx);
+
+                // Limpiar memoria si el paquete salió de la pantalla
+                if (p.x - p.width > canvas.width) {
+                    packets.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Arrancar animación
+        animate();
+    </script>
+</body>
+</html>
